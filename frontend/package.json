@@ -1,0 +1,20 @@
+{
+  "name": "frontend",
+  "version": "1.0.0",
+  "description": "UI for full rampage game",
+  "source": "./index.html",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "start": "parcel",
+    "build": "parcel build"
+  },
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "pixi.js": "^8.0.2",
+    "typescript": "^5.4.2"
+  },
+  "devDependencies": {
+    "parcel": "^2.12.0"
+  }
+}
