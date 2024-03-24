@@ -9,6 +9,10 @@ export interface RampageVehicleProps {
   cannonY: number;
 }
 
+function getCenter(vehicle: RampageVehicleProps) {
+  return { centerX: vehicle.x + 25 / 2, centerY: vehicle.y + 25 / 2 };
+}
+
 function drawRampageVehicle(props: RampageVehicleProps) {
   const drawProps = useMemo(() => {
     return { ...props };
@@ -16,13 +20,17 @@ function drawRampageVehicle(props: RampageVehicleProps) {
 
   const draw = useCallback(
     (g: Graphics) => {
-      const { x, y, cannonX, cannonY } = { ...drawProps };
+      const { x, y, cannonX, cannonY, centerX, centerY } = {
+        ...drawProps,
+        ...getCenter(drawProps),
+      };
+
       g.clear()
         .beginFill(0xff3300)
-        .drawRect(x, y, 50, 50)
+        .drawRect(x, y, 25, 25)
         .endFill()
+        .moveTo(centerX, centerY)
         .lineStyle(2, 0xffffff)
-        .moveTo(x + 25, y + 25)
         .lineTo(cannonX, cannonY);
     },
     [drawProps]
