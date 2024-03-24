@@ -38,7 +38,7 @@ pub mod gamelogic {
     }
 
     #[derive(Debug)]
-    struct PlayerOutput {
+    struct ControllerPlayerOutput {
         position: Point,
         cannon_position: Point
     }
@@ -94,8 +94,8 @@ pub mod gamelogic {
                 player.move_cannon(input.cannon_input)
             }
         }
-        pub fn output(&self) -> Vec<PlayerOutput> {
-            self.players.iter().map(|player| PlayerOutput {position: player.position, cannon_position: player.calculate_cannon_position()}).collect()
+        pub fn output(&self) -> Vec<ControllerPlayerOutput> {
+            self.players.iter().map(|player| ControllerPlayerOutput {position: player.position, cannon_position: player.calculate_cannon_position()}).collect()
         }
         fn get_player_by_id(&mut self, player_id: i32) -> Result<&mut Player, String> { // make this look nicer
             if let Some(player) = self.players.iter_mut().find(|player| player.id == player_id) {
