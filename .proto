@@ -2,8 +2,7 @@ syntax = "proto3"
 
 message PlayerInput {
     int32 player_id = 1;
-    uint32 input = 2;
-    int32 cannon_input = 3;
+    uint8 input = 2;
 }
 
 message Point {
