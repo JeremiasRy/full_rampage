@@ -1,11 +1,13 @@
 pub mod gamelogic {
     use std::f32::consts::PI;
-    use bitflags::bitflags;
+    use bitflags::{bitflags, Flags};
     const PLAYER_SIZE: i32 = 25;
     const CANNON_LENGTH: i32 = 25;
 
     bitflags! {
-        struct Direction: u8 {
+        #[derive(Debug)]
+        struct PlayerInputFlags: u8 {
+            const noinput = 0;
             const up = 0b000001;
             const right = 0b000010;
             const down = 0b000100;
@@ -31,12 +33,6 @@ pub mod gamelogic {
         player_id: i32,
         input: u8,
     }
-    #[derive(Debug)]
-    struct Player {
-        id: i32,
-        position: Point,
-        cannon_angle: i32,
-    }
 
     #[derive(Debug)]
     struct ControllerPlayerOutput {
@@ -44,13 +40,44 @@ pub mod gamelogic {
         cannon_position: Point
     }
 
+    #[derive(Debug)]
+    struct Player {
+        id: i32,
+        position: Point,
+        cannon_angle: i32,
+        input: PlayerInputFlags,
+    }
+
     impl Player {
-        pub fn move_me(&mut self, dx: i32, dy:i32) {
-            self.position.translate(dx, dy);
+        pub fn tick(&mut self) {
+            let mut dx: i32 = 0;
+            let mut dy: i32 = 0;
+            let mut da: i32 = 0;
+
+            if self.input.contains(PlayerInputFlags::up) {
+                dy -= 1;
+            }
+            if self.input.contains(PlayerInputFlags::down) {
+                dy += 1;
+            }
+            if self.input.contains(PlayerInputFlags::right) {
+                dx += 1;
+            }
+            if self.input.contains(PlayerInputFlags::left) {
+                dx -= 1;
+            }
+            if self.input.contains(PlayerInputFlags::cannon_positive) {
+                da += 1;
+            }
+            if self.input.contains(PlayerInputFlags::cannon_negative) {
+                da -= 1;
+            }
+
+            self.position.x += dx;
+            self.position.y += dy;
+            self.cannon_angle += da;
         }
-        pub fn move_cannon(&mut self, da: i32) {
-            self.cannon_angle = self.cannon_angle + da % 359;
-        }
+
         fn calculate_cannon_position(&self) -> Point {
             let cannon_radians = self.cannon_angle as f32 * PI / 180f32;
             let (center_x, center_y) = (self.position.x + PLAYER_SIZE / 2, self.position.y + PLAYER_SIZE / 2);
@@ -70,38 +97,20 @@ pub mod gamelogic {
     }
 
     impl GameController {
+        pub fn tick(&mut self) {
+            for player in self.players.iter_mut() {
+                if player.input.bits() > 0 {
+                    player.tick()
+                }
+            }
+        }
+        pub fn should_tick(&self) -> bool { // for now lets just check if players have some input in the future need to check for particles etc..
+            self.players.iter().any(|player| player.input.bits() > 0)
+        }
         pub fn player_input(&mut self, input: PlayerInput) {
             let player: &mut Player = self.get_player_by_id(input.player_id).expect("Player not found");
-            let mut dx: i32 = 0;
-            let mut dy: i32 = 0;
-            let mut da: i32 = 0;
-            let direction: Direction = Direction::from_bits(input.input).expect("Invalid input");
-                
-            if direction.contains(Direction::up) {
-                dy -= 1;
-            }
-            if direction.contains(Direction::down) {
-                dy += 1;
-            }
-            if direction.contains(Direction::left) {
-                dx -= 1;
-            }
-            if direction.contains(Direction::right) {
-                dx += 1;
-            }
-            player.move_me(dx, dy);
-
-            if direction.contains(Direction::cannon_negative) {
-                da -= 1;
-            }
-
-            if direction.contains(Direction::cannon_positive) {
-                da += 1;
-            }
-
-            if da != 0 {
-                player.move_cannon(da);
-            }
+            let direction: PlayerInputFlags = PlayerInputFlags::from_bits(input.input).expect("Invalid input");
+            player.input = direction;
         }
         pub fn output(&self) -> Vec<ControllerPlayerOutput> {
             self.players.iter().map(|player: &Player| ControllerPlayerOutput {position: player.position, cannon_position: player.calculate_cannon_position()}).collect()
@@ -123,41 +132,46 @@ mod tests {
     #[test]
     fn test_player_input() {
         let players: Vec<Player> = vec![
-            Player {id: 1, position: Point{x: 10, y: 10}, cannon_angle: 180},
-            Player {id: 2, position: Point{x: 20, y: 20}, cannon_angle: 0},
-            Player {id: 3, position: Point{x: 30, y: 30}, cannon_angle: 0},
-            Player {id: 4, position: Point{x: 40, y: 40}, cannon_angle: 0},
-            Player {id: 5, position: Point{x: 50, y: 50}, cannon_angle: 0},
-            Player {id: 6, position: Point{x: 60, y: 60}, cannon_angle: 0},
-            Player {id: 7, position: Point{x: 70, y: 70}, cannon_angle: 0},
-            Player {id: 8, position: Point{x: 80, y: 80}, cannon_angle: 180},
+            Player {id: 1, position: Point{x: 10, y: 10}, cannon_angle: 180, input: PlayerInputFlags::noinput},
+            Player {id: 2, position: Point{x: 20, y: 20}, cannon_angle: 0, input: PlayerInputFlags::noinput},
+            Player {id: 3, position: Point{x: 30, y: 30}, cannon_angle: 0, input: PlayerInputFlags::noinput},
+            Player {id: 4, position: Point{x: 40, y: 40}, cannon_angle: 0, input: PlayerInputFlags::noinput},
+            Player {id: 5, position: Point{x: 50, y: 50}, cannon_angle: 0, input: PlayerInputFlags::noinput},
+            Player {id: 6, position: Point{x: 60, y: 60}, cannon_angle: 0, input: PlayerInputFlags::noinput},
+            Player {id: 7, position: Point{x: 70, y: 70}, cannon_angle: 0, input: PlayerInputFlags::noinput},
+            Player {id: 8, position: Point{x: 80, y: 80}, cannon_angle: 180, input: PlayerInputFlags::noinput},
         ];
 
-        let mut controller_output = GameController {
+        let mut controller = GameController {
             height: 100,
             width: 100,
             players,
         };
 
         let inputs: [u8; 8] = [
-            Direction::up.bits(), 
-            Direction::right.bits(), 
-            Direction::down.bits(), 
-            Direction::left.bits(), 
-            (Direction::up | Direction::right).bits(), 
-            (Direction::up | Direction::left).bits(), 
-            (Direction::down | Direction::right).bits(), 
-            (Direction::down | Direction::left).bits()
+            PlayerInputFlags::up.bits(), 
+            PlayerInputFlags::right.bits(), 
+            PlayerInputFlags::down.bits(), 
+            PlayerInputFlags::left.bits(), 
+            (PlayerInputFlags::up | PlayerInputFlags::right).bits(), 
+            (PlayerInputFlags::up | PlayerInputFlags::left).bits(), 
+            (PlayerInputFlags::down | PlayerInputFlags::right).bits(), 
+            (PlayerInputFlags::down | PlayerInputFlags::left).bits()
         ];
+
+        assert_eq!(controller.should_tick(), false);
 
         for (index, &element) in inputs.iter().enumerate() {
             let player_input: PlayerInput = PlayerInput {
                 player_id: (index + 1) as i32,
                 input: element,
             };
-            controller_output.player_input(player_input);
+            controller.player_input(player_input);
         }
-        let controller_output: Vec<ControllerPlayerOutput> = controller_output.output();
+        assert_eq!(controller.should_tick(), true);
+        controller.tick();
+
+        let controller_output: Vec<ControllerPlayerOutput> = controller.output();
         println!("{:?}", controller_output);
         assert_eq!(controller_output[0].position, Point {x: 10, y: 9}); // player moved up
         assert_eq!(controller_output[1].position, Point {x: 21, y: 20}); // player moved right
