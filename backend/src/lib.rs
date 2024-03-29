@@ -75,11 +75,17 @@ pub mod gamelogic {
 
             self.position.x += dx;
             self.position.y += dy;
-            self.cannon_angle += da;
+            let mut new_angle = (self.cannon_angle + da) % 359;
+
+            if new_angle < 0 {
+                new_angle += 360;
+            }
+            self.cannon_angle = new_angle;
+                
         }
 
         fn calculate_cannon_position(&self) -> Point {
-            let cannon_radians = self.cannon_angle as f32 * PI / 180f32;
+            let cannon_radians = (self.cannon_angle as f32).to_radians();
             let (center_x, center_y) = (self.position.x + PLAYER_SIZE / 2, self.position.y + PLAYER_SIZE / 2);
             let dx = CANNON_LENGTH as f32 * cannon_radians.cos();
             let dy = CANNON_LENGTH as f32 * cannon_radians.sin();
@@ -109,8 +115,8 @@ pub mod gamelogic {
         }
         pub fn player_input(&mut self, input: PlayerInput) {
             let player: &mut Player = self.get_player_by_id(input.player_id).expect("Player not found");
-            let direction: PlayerInputFlags = PlayerInputFlags::from_bits(input.input).expect("Invalid input");
-            player.input = direction;
+            let input_flags: PlayerInputFlags = PlayerInputFlags::from_bits(input.input).expect("Invalid input");
+            player.input = input_flags;
         }
         pub fn output(&self) -> Vec<ControllerPlayerOutput> {
             self.players.iter().map(|player: &Player| ControllerPlayerOutput {position: player.position, cannon_position: player.calculate_cannon_position()}).collect()
@@ -130,7 +136,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_player_input() {
+    fn test_player_movement() {
         let players: Vec<Player> = vec![
             Player {id: 1, position: Point{x: 10, y: 10}, cannon_angle: 180, input: PlayerInputFlags::noinput},
             Player {id: 2, position: Point{x: 20, y: 20}, cannon_angle: 0, input: PlayerInputFlags::noinput},
@@ -161,10 +167,10 @@ mod tests {
 
         assert_eq!(controller.should_tick(), false);
 
-        for (index, &element) in inputs.iter().enumerate() {
+        for (index, &input) in inputs.iter().enumerate() {
             let player_input: PlayerInput = PlayerInput {
                 player_id: (index + 1) as i32,
-                input: element,
+                input,
             };
             controller.player_input(player_input);
         }
@@ -172,7 +178,6 @@ mod tests {
         controller.tick();
 
         let controller_output: Vec<ControllerPlayerOutput> = controller.output();
-        println!("{:?}", controller_output);
         assert_eq!(controller_output[0].position, Point {x: 10, y: 9}); // player moved up
         assert_eq!(controller_output[1].position, Point {x: 21, y: 20}); // player moved right
         assert_eq!(controller_output[2].position, Point {x: 30, y: 31}); // player moved down
@@ -181,6 +186,50 @@ mod tests {
         assert_eq!(controller_output[5].position, Point {x: 59, y: 59}); // player moved up-left
         assert_eq!(controller_output[6].position, Point {x: 71, y: 71}); // player moved down-right
         assert_eq!(controller_output[7].position, Point {x: 79, y: 81}); // player moved down-left
+    }
+
+    #[test]
+    fn test_player_cannon_movement() {
+        let players: Vec<Player> = vec![
+            Player {id: 1, position: Point{x: 10, y: 10}, cannon_angle: 0, input: PlayerInputFlags::noinput},
+            Player {id: 2, position: Point{x: 20, y: 20}, cannon_angle: 0, input: PlayerInputFlags::noinput},
+        ];
+
+        let mut controller: GameController = GameController {
+            height: 100,
+            width: 100,
+            players,
+        };
+
+        let inputs: [u8; 2] = [
+            PlayerInputFlags::cannon_negative.bits(), 
+            PlayerInputFlags::cannon_positive.bits(), 
+        ];
+
+        assert_eq!(controller.should_tick(), false);
+        println!("{:?}", controller.output());
+
+        for (index, &input) in inputs.iter().enumerate() {
+            let player_input: PlayerInput = PlayerInput {
+                player_id: (index + 1) as i32,
+                input,
+            };
+            controller.player_input(player_input);
+        }
+        assert_eq!(controller.should_tick(), true);
+        controller.tick();
+        controller.tick();
+        controller.tick();
+        controller.tick();
+        controller.tick();
+
+        assert_eq!(controller.players[0].cannon_angle, 355);
+        assert_eq!(controller.players[1].cannon_angle, 5);
+
+        let controller_output: Vec<ControllerPlayerOutput> = controller.output();
+        println!("{:?}", controller_output[0].cannon_position.y);
+        assert!(controller_output[0].cannon_position.y < 22);
+        assert!(controller_output[1].cannon_position.y > 32);
     }
 }
 }
