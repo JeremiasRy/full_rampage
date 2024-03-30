@@ -1,6 +1,7 @@
 pub mod gamelogic {
-    use std::f32::consts::PI;
-    use bitflags::{bitflags, Flags};
+    use bitflags::{bitflags};
+    use rand::{thread_rng, Rng};
+    use serde::{Serialize, Deserialize};
     const PLAYER_SIZE: i32 = 25;
     const CANNON_LENGTH: i32 = 25;
 
@@ -27,15 +28,21 @@ pub mod gamelogic {
             self.x += dx;
             self.y += dy;
         }
+        pub fn random_point(height_bounds: i32, width_bounds: i32) -> Point {
+            Point {
+                x: thread_rng().gen_range(0..=width_bounds),
+                y: thread_rng().gen_range(0..=height_bounds)
+            }
+        }
     }
-    #[derive(Debug)]
-    struct PlayerInput {
+    #[derive(Serialize, Deserialize, Debug)]
+    pub struct PlayerInputRequest {
         player_id: i32,
         input: u8,
     }
 
     #[derive(Debug)]
-    struct ControllerPlayerOutput {
+    pub struct ControllerResponse {
         position: Point,
         cannon_position: Point
     }
@@ -49,6 +56,10 @@ pub mod gamelogic {
     }
 
     impl Player {
+        pub fn has_input(&self) -> bool {
+            self.id > 0
+        }
+
         pub fn tick(&mut self) {
             let mut dx: i32 = 0;
             let mut dy: i32 = 0;
@@ -81,7 +92,6 @@ pub mod gamelogic {
                 new_angle += 360;
             }
             self.cannon_angle = new_angle;
-                
         }
 
         fn calculate_cannon_position(&self) -> Point {
@@ -96,36 +106,55 @@ pub mod gamelogic {
         }
     }
 
-    struct GameController {
-        height: u32,
-        width: u32,
-        players: Vec<Player>
+    pub struct GameController {
+        height: i32,
+        width: i32,
+        players: Vec<Player>,
+        id_count: i32
     }
 
     impl GameController {
+        pub fn new() -> GameController {
+            GameController {
+                id_count: 0,
+                height: 800,
+                width: 1200,
+                players: Vec::<Player>::new()
+            }
+        }
         pub fn tick(&mut self) {
             for player in self.players.iter_mut() {
-                if player.input.bits() > 0 {
+                if player.has_input() {
                     player.tick()
                 }
             }
         }
         pub fn should_tick(&self) -> bool { // for now lets just check if players have some input in the future need to check for particles etc..
-            self.players.iter().any(|player| player.input.bits() > 0)
+            self.players.iter().any(|player| player.has_input())
         }
-        pub fn player_input(&mut self, input: PlayerInput) {
+        pub fn player_input(&mut self, input: PlayerInputRequest) {
             let player: &mut Player = self.get_player_by_id(input.player_id).expect("Player not found");
             let input_flags: PlayerInputFlags = PlayerInputFlags::from_bits(input.input).expect("Invalid input");
             player.input = input_flags;
         }
-        pub fn output(&self) -> Vec<ControllerPlayerOutput> {
-            self.players.iter().map(|player: &Player| ControllerPlayerOutput {position: player.position, cannon_position: player.calculate_cannon_position()}).collect()
+        pub fn output(&self) -> Vec<ControllerResponse> {
+            self.players.iter().map(|player: &Player| ControllerResponse {position: player.position, cannon_position: player.calculate_cannon_position()}).collect()
+        }
+        pub fn add_player(&mut self) -> i32 {
+            self.players.push(Player {
+                id: self.id_count,
+                position: Point::random_point(self.height, self.width),
+                cannon_angle: 0,
+                input: PlayerInputFlags::noinput
+            });
+            self.id_count += 1;
+            self.id_count
         }
         fn get_player_by_id(&mut self, player_id: i32) -> Result<&mut Player, String> { // make this look nicer
             if let Some(player) = self.players.iter_mut().find(|player| player.id == player_id) {
-                return Ok(player)
+                Ok(player)
             } else {
-                return Err(format!("Can't find player with id: {}", player_id))
+                Err(format!("Can't find player with id: {}", player_id))
             }
         }
 
@@ -168,7 +197,7 @@ mod tests {
         assert_eq!(controller.should_tick(), false);
 
         for (index, &input) in inputs.iter().enumerate() {
-            let player_input: PlayerInput = PlayerInput {
+            let player_input: PlayerInputRequest = PlayerInputRequest {
                 player_id: (index + 1) as i32,
                 input,
             };
@@ -177,7 +206,7 @@ mod tests {
         assert_eq!(controller.should_tick(), true);
         controller.tick();
 
-        let controller_output: Vec<ControllerPlayerOutput> = controller.output();
+        let controller_output: Vec<ControllerResponse> = controller.output();
         assert_eq!(controller_output[0].position, Point {x: 10, y: 9}); // player moved up
         assert_eq!(controller_output[1].position, Point {x: 21, y: 20}); // player moved right
         assert_eq!(controller_output[2].position, Point {x: 30, y: 31}); // player moved down
@@ -210,7 +239,7 @@ mod tests {
         println!("{:?}", controller.output());
 
         for (index, &input) in inputs.iter().enumerate() {
-            let player_input: PlayerInput = PlayerInput {
+            let player_input: PlayerInputRequest = PlayerInputRequest {
                 player_id: (index + 1) as i32,
                 input,
             };
@@ -226,7 +255,7 @@ mod tests {
         assert_eq!(controller.players[0].cannon_angle, 355);
         assert_eq!(controller.players[1].cannon_angle, 5);
 
-        let controller_output: Vec<ControllerPlayerOutput> = controller.output();
+        let controller_output: Vec<ControllerResponse> = controller.output();
         println!("{:?}", controller_output[0].cannon_position.y);
         assert!(controller_output[0].cannon_position.y < 22);
         assert!(controller_output[1].cannon_position.y > 32);
