@@ -38,10 +38,12 @@ async fn handle_connection_inner(stream: TcpStream, game_controller: GameControl
     let game_state = game_controller.clone();
 
     let (mut write, mut read) = incoming_stream.split();
+    let mut connection_player_index = 0;
 
     {
         let mut controller = game_state.lock().await;
-        let result = write.send(Message::Text(controller.add_player().to_string())).await;
+        connection_player_index = controller.add_player();
+        let result = write.send(Message::Text(connection_player_index.to_string())).await;
 
         println!("result {:?}", result);
     }
@@ -57,9 +59,14 @@ async fn handle_connection_inner(stream: TcpStream, game_controller: GameControl
                 },
                 Err(e) => println!("Things went south: {:?}", e)
             }
-
         }
     }
+
+    {
+        let mut controller = game_state.lock().await;
+        controller.drop_player(connection_player_index);
+    }
+
     println!("Connection dropped!");
     Ok(())
 }

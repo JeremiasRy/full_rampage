@@ -38,7 +38,7 @@ function App() {
   useEffect(() => {
     const keysArray = Array.from(keysDown);
 
-    if (isEqual(keysArray, sentInputs)) {
+    if (id == 0 || isEqual(keysArray, sentInputs)) {
       return;
     }
 

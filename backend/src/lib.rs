@@ -150,6 +150,10 @@ pub mod gamelogic {
             });
             self.id_count
         }
+        pub fn drop_player(&mut self, player_id: i32) {
+            let index = self.players.iter().position(|player| player.id == player_id).unwrap();
+            self.players.remove(index);
+        }
         fn get_player_by_id(&mut self, player_id: i32) -> Result<&mut Player, String> { // make this look nicer
             if let Some(player) = self.players.iter_mut().find(|player| player.id == player_id) {
                 Ok(player)
