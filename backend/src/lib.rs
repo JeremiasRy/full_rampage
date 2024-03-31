@@ -1,5 +1,5 @@
 pub mod gamelogic {
-    use bitflags::{bitflags};
+    use bitflags::bitflags;
     use rand::{thread_rng, Rng};
     use serde::{Serialize, Deserialize};
     const PLAYER_SIZE: i32 = 25;
@@ -17,7 +17,7 @@ pub mod gamelogic {
             const cannon_negative = 0b100000;
         }
     }
-    #[derive(Debug, Clone, Copy, PartialEq)]
+    #[derive(Debug, Clone, Copy, PartialEq, Serialize)]
     struct Point {
         x: i32,
         y: i32
@@ -41,7 +41,7 @@ pub mod gamelogic {
         input: u8,
     }
 
-    #[derive(Debug)]
+    #[derive(Debug, Serialize)]
     pub struct ControllerResponse {
         position: Point,
         cannon_position: Point
@@ -157,7 +157,6 @@ pub mod gamelogic {
                 Err(format!("Can't find player with id: {}", player_id))
             }
         }
-
 }
 
 #[cfg(test)]
@@ -181,6 +180,7 @@ mod tests {
             height: 100,
             width: 100,
             players,
+            id_count: 0,
         };
 
         let inputs: [u8; 8] = [
@@ -228,6 +228,7 @@ mod tests {
             height: 100,
             width: 100,
             players,
+            id_count: 0
         };
 
         let inputs: [u8; 2] = [
