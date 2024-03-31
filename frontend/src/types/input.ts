@@ -4,10 +4,7 @@ export const validInputs = {
   ArrowDown: () => parseInt("0100", 2),
   ArrowLeft: () => parseInt("1000", 2),
 } as const;
+
 export type ValidInput = ReturnType<
   (typeof validInputs)[keyof typeof validInputs]
 >;
-
-export type InputRequest = {
-  keys: ValidInput[];
-};

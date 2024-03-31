@@ -4,7 +4,7 @@ use futures_util::stream::StreamExt;
 use futures_util::SinkExt;
 use tokio::net::{TcpListener, TcpStream};
 use tokio_tungstenite::{accept_async, tungstenite::protocol::Message, WebSocketStream};
-use backend::gamelogic::GameController;
+use backend::gamelogic::{GameController, PlayerInputRequest};
 
 type GameControllerArc = Arc<Mutex<GameController>>;
 
@@ -17,12 +17,8 @@ async fn main() {
 
     println!("Server running at {}!", addr);
 
-    let _ = tokio::spawn(connection_handler(listener, game_controller.clone())).await;
-}
-
-async fn connection_handler(listener: TcpListener, game_controller: GameControllerArc) {
-    loop {
-        let (stream, _) = listener.accept().await.expect("Error happened when receiving a request");
+    while let Ok((stream, addr)) = listener.accept().await {
+        println!("Incoming traffic {}", addr);
 
         let game_controller = game_controller.clone();
         tokio::spawn(handle_connection(stream, game_controller));
@@ -30,7 +26,7 @@ async fn connection_handler(listener: TcpListener, game_controller: GameControll
 }
 
 async fn handle_connection(stream: TcpStream, game_controller: GameControllerArc) {
-    if let Err(e) = handle_connection_inner(stream, game_controller).await {
+    if let Err(e) = handle_connection_inner(stream, game_controller.clone()).await {
         println!("Something happened: {:?}", e)
     }
 }
@@ -43,14 +39,25 @@ async fn handle_connection_inner(stream: TcpStream, game_controller: GameControl
 
     let (mut write, mut read) = incoming_stream.split();
 
-    let mut controller = game_state.lock().await;
-    let result = write.send(Message::Text(controller.add_player().to_string())).await;
+    {
+        let mut controller = game_state.lock().await;
+        let result = write.send(Message::Text(controller.add_player().to_string())).await;
 
-    println!("result {:?}", result);
+        println!("result {:?}", result);
+    }
 
     while let Some(Ok(msg)) = read.next().await {
-        if msg.is_text() {
-            println!("{msg}");
+        if let Ok(json) = msg.into_text() {
+            println!("{json}");
+            let parsed_input = serde_json::from_str(&json);
+            match parsed_input {
+                Ok(res) => {
+                    let mut controller = game_state.lock().await;
+                    controller.player_input(res);
+                },
+                Err(e) => println!("Things went south: {:?}", e)
+            }
+
         }
     }
     println!("Connection dropped!");

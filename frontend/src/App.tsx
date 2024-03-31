@@ -7,7 +7,9 @@ import isEqual from "lodash/isEqual";
 function App() {
   const [keysDown, setKeysDown] = useState<Set<number>>(new Set());
   const [sentInputs, setSentInputs] = useState<number[]>([]);
+  const [id, setId] = useState(0);
   const connection = useRef<WebSocket | null>(null);
+
   function handleKeyDown(event: KeyboardEvent) {
     event.preventDefault();
     if (!isValidInput(event.code)) {
@@ -40,7 +42,12 @@ function App() {
       return;
     }
 
-    connection.current?.send(keysArray.reduce((a, b) => a + b, 0).toString());
+    const request = {
+      player_id: id,
+      input: keysArray.reduce((a, b) => a + b, 0),
+    };
+
+    connection.current?.send(JSON.stringify(request));
     setSentInputs(keysArray);
   }, [keysDown]);
 
@@ -56,7 +63,7 @@ function App() {
     });
 
     socket.addEventListener("message", (event) => {
-      console.log("Message from server ", event.data);
+      setId(parseInt(event.data));
     });
 
     document.addEventListener("keydown", handleKeyDown);

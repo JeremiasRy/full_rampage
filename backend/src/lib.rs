@@ -141,13 +141,13 @@ pub mod gamelogic {
             self.players.iter().map(|player: &Player| ControllerResponse {position: player.position, cannon_position: player.calculate_cannon_position()}).collect()
         }
         pub fn add_player(&mut self) -> i32 {
+            self.id_count += 1;
             self.players.push(Player {
                 id: self.id_count,
                 position: Point::random_point(self.height, self.width),
                 cannon_angle: 0,
                 input: PlayerInputFlags::noinput
             });
-            self.id_count += 1;
             self.id_count
         }
         fn get_player_by_id(&mut self, player_id: i32) -> Result<&mut Player, String> { // make this look nicer
