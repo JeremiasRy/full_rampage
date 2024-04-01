@@ -35,7 +35,6 @@ async fn main() {
 
 async fn game_controller_updater(game_controller: GameControllerArc, connection_pool: ConnectionPool) {
     loop {
-        tokio::time::sleep(Duration::from_millis(1000)).await;
         let mut controller = game_controller.lock().await;
         if controller.should_tick() {
             let connections = connection_pool.lock().await;

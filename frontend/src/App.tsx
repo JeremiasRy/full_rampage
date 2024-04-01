@@ -8,6 +8,7 @@ function App() {
   const [keysDown, setKeysDown] = useState<Set<number>>(new Set());
   const [sentInputs, setSentInputs] = useState<number[]>([]);
   const [id, setId] = useState(0);
+  const [frame, setFrame] = useState<Frame[]>([]);
   const connection = useRef<WebSocket | null>(null);
 
   function handleKeyDown(event: KeyboardEvent) {
@@ -62,13 +63,14 @@ function App() {
       console.log("things went south  ", e);
     });
 
-    socket.addEventListener("message", (event) => {
+    socket.addEventListener("message", (event): void => {
       let isId = parseInt(event.data);
       if (isId) {
         setId(isId);
+        return;
       }
 
-      console.log(event.data);
+      setFrame(JSON.parse(event.data));
     });
 
     document.addEventListener("keydown", handleKeyDown);
@@ -83,7 +85,7 @@ function App() {
     };
   }, []);
 
-  return <GameWindow />;
+  return <GameWindow frame={frame} />;
 }
 
 export default App;
