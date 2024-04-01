@@ -13,6 +13,7 @@ function App() {
 
   function handleKeyDown(event: KeyboardEvent) {
     event.preventDefault();
+    console.log(event.code);
     if (!isValidInput(event.code)) {
       return;
     }

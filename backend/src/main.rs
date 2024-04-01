@@ -7,6 +7,7 @@ use tokio::sync::Mutex;
 use futures_util::stream::{SplitSink, StreamExt};
 use futures_util::SinkExt;
 use tokio::net::{TcpListener, TcpStream};
+use tokio::time::Instant;
 use tokio_tungstenite::{accept_async, tungstenite::protocol::Message, WebSocketStream};
 use backend::gamelogic::{GameController, PlayerInputRequest};
 
@@ -34,15 +35,22 @@ async fn main() {
 }
 
 async fn game_controller_updater(game_controller: GameControllerArc, connection_pool: ConnectionPool) {
+    let tick_rate = Duration::from_secs_f64(1.0 / 60.0); // 60 fps
+    let mut last_tick = Instant::now();
     loop {
+
+        let elapsed = Instant::now().duration_since(last_tick);
+        if elapsed < tick_rate {
+            tokio::time::sleep(tick_rate - elapsed).await;
+        }
+        last_tick = Instant::now();
+
         let mut controller = game_controller.lock().await;
         if controller.should_tick() {
             let connections = connection_pool.lock().await;
             controller.tick();
-            println!("Tick!!");
 
             let output = controller.output();
-            println!("{:?}", connections.iter().count());
             for write_arc in connections.values() {
                 let mut write = write_arc.lock().await;
                 let _ = write.send(Message::Text(String::from(serde_json::to_string(&output).unwrap()))).await;
@@ -80,7 +88,6 @@ async fn handle_connection_inner(stream: TcpStream, game_controller: GameControl
 
     while let Some(Ok(msg)) = read.next().await {
         if let Ok(json) = msg.into_text() {
-            println!("{json}");
             let parsed_input = serde_json::from_str(&json);
             match parsed_input {
                 Ok(res) => {
