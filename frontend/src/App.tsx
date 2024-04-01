@@ -3,6 +3,7 @@ import { validInputs } from "./types/input";
 import { isValidInput } from "./utils/helpers";
 import { useEffect, useRef, useState } from "react";
 import isEqual from "lodash/isEqual";
+import proto from "protobufjs";
 
 function App() {
   const [keysDown, setKeysDown] = useState<Set<number>>(new Set());
@@ -10,10 +11,12 @@ function App() {
   const [id, setId] = useState(0);
   const [frame, setFrame] = useState<Frame[]>([]);
   const connection = useRef<WebSocket | null>(null);
+  const inputRequest = useRef<proto.Type | null>(null);
+  const idResponse = useRef<proto.Type | null>(null);
+  const frameResponse = useRef<proto.Type | null>(null);
 
   function handleKeyDown(event: KeyboardEvent) {
     event.preventDefault();
-    console.log(event.code);
     if (!isValidInput(event.code)) {
       return;
     }
@@ -43,19 +46,33 @@ function App() {
     if (id == 0 || isEqual(keysArray, sentInputs)) {
       return;
     }
-
-    const request = {
+    const payload = {
       player_id: id,
       input: keysArray.reduce((a, b) => a + b, 0),
     };
 
-    connection.current?.send(JSON.stringify(request));
+    const message = inputRequest.current?.create(payload);
+    if (!message) {
+      return;
+    }
+    const buffer = inputRequest.current?.encode(message).finish();
+    connection.current?.send(buffer?.buffer!);
     setSentInputs(keysArray);
   }, [keysDown]);
 
   useEffect(() => {
-    const socket = new WebSocket("ws://127.0.0.1:9999");
+    proto.load("messages.proto", (err, root) => {
+      console.log(err);
+      inputRequest.current = root?.lookupType("InputRequest") || null;
+      idResponse.current = root?.lookupType("PlayerId") || null;
+      frameResponse.current = root?.lookupType("ServerOutput") || null;
 
+      console.log(inputRequest.current);
+      console.log(idResponse.current);
+      console.log(frameResponse.current);
+    });
+
+    const socket = new WebSocket("ws://127.0.0.1:9999");
     socket.addEventListener("open", () => {
       console.log("We are open!");
     });
@@ -65,13 +82,15 @@ function App() {
     });
 
     socket.addEventListener("message", (event): void => {
-      let isId = parseInt(event.data);
+      const isId = idResponse.current?.verify(event.data);
       if (isId) {
-        setId(isId);
+        setId(parseInt(isId));
         return;
       }
 
-      setFrame(JSON.parse(event.data));
+      const isFrame = frameResponse.current?.verify(event.data);
+
+      setFrame(isFrame as unknown as Frame[]);
     });
 
     document.addEventListener("keydown", handleKeyDown);

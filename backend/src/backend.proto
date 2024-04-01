@@ -1,0 +1,24 @@
+syntax = "proto3";
+
+message PlayerId {
+    int32 player_id = 1;
+}
+
+message Point {
+    int32 x = 1;
+    int32 y = 2;
+}
+
+message InputRequest {
+    int32 player_id = 1;
+    int32 input = 2;
+}
+
+message ControllerResponse {
+    Point position = 1;
+    Point cannon_position = 2;
+}
+
+message ServerOutput {
+    repeated ControllerResponse responses = 1;
+}
