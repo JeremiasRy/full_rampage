@@ -63,7 +63,12 @@ function App() {
     });
 
     socket.addEventListener("message", (event) => {
-      setId(parseInt(event.data));
+      let isId = parseInt(event.data);
+      if (isId) {
+        setId(isId);
+      }
+
+      console.log(event.data);
     });
 
     document.addEventListener("keydown", handleKeyDown);
