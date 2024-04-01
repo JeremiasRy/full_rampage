@@ -1,5 +1,5 @@
 pub mod gamelogic {
-    use bitflags::bitflags;
+    use bitflags::{bitflags, Flags};
     use rand::{thread_rng, Rng};
     use serde::{Serialize, Deserialize};
     const PLAYER_SIZE: i32 = 25;
@@ -57,7 +57,7 @@ pub mod gamelogic {
 
     impl Player {
         pub fn has_input(&self) -> bool {
-            self.id > 0
+            self.input.bits() > 0
         }
 
         pub fn tick(&mut self) {
