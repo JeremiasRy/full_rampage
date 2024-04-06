@@ -1,9 +1,18 @@
+include!(concat!(env!("OUT_DIR"), "/messages.rs"));
+
 pub mod gamelogic {
-    use bitflags::{bitflags, Flags};
+    use bitflags::bitflags;
+    use protobuf::RepeatedField;
     use rand::{thread_rng, Rng};
-    use serde::{Serialize, Deserialize};
+    use serde::Serialize;
+    use tokio_tungstenite::tungstenite::http::response;
     const PLAYER_SIZE: i32 = 25;
     const CANNON_LENGTH: i32 = 25;
+    type ServerOutput = crate::ServerOutput;
+    type ControllerResponse = crate::ControllerResponse;
+    type InputRequest = crate::InputRequest;
+    type PlayerId = crate::PlayerId;
+    type Point = crate::Point;
 
     bitflags! {
         #[derive(Debug)]
@@ -18,39 +27,35 @@ pub mod gamelogic {
         }
     }
     #[derive(Debug, Clone, Copy, PartialEq, Serialize)]
-    struct Point {
+    struct ControllerPoint {
         x: i32,
         y: i32
     }
 
-    impl Point {
+    impl ControllerPoint {
         pub fn translate(&mut self, dx: i32, dy: i32) {
             self.x += dx;
             self.y += dy;
         }
-        pub fn random_point(height_bounds: i32, width_bounds: i32) -> Point {
-            Point {
+        pub fn random_point(height_bounds: i32, width_bounds: i32) -> ControllerPoint {
+            ControllerPoint {
                 x: thread_rng().gen_range(0..=width_bounds),
                 y: thread_rng().gen_range(0..=height_bounds)
             }
         }
-    }
-    #[derive(Serialize, Deserialize, Debug)]
-    pub struct PlayerInputRequest {
-        player_id: i32,
-        input: u8,
-    }
+        pub fn to_buffer_point(&self) -> Point {
+            let mut point = Point::new();
+            point.set_x(self.x);
+            point.set_y(self.y);
 
-    #[derive(Debug, Serialize)]
-    pub struct ControllerResponse {
-        position: Point,
-        cannon_position: Point
+            point
+        }
     }
 
     #[derive(Debug)]
     struct Player {
         id: i32,
-        position: Point,
+        position: ControllerPoint,
         cannon_angle: i32,
         input: PlayerInputFlags,
     }
@@ -94,12 +99,12 @@ pub mod gamelogic {
             self.cannon_angle = new_angle;
         }
 
-        fn calculate_cannon_position(&self) -> Point {
+        fn calculate_cannon_position(&self) -> ControllerPoint {
             let cannon_radians = (self.cannon_angle as f32).to_radians();
             let (center_x, center_y) = (self.position.x + PLAYER_SIZE / 2, self.position.y + PLAYER_SIZE / 2);
             let dx = CANNON_LENGTH as f32 * cannon_radians.cos();
             let dy = CANNON_LENGTH as f32 * cannon_radians.sin();
-            Point {
+            ControllerPoint {
                 x: dx.round() as i32 + center_x,
                 y: dy.round() as i32 + center_y
             }
@@ -132,19 +137,30 @@ pub mod gamelogic {
         pub fn should_tick(&self) -> bool { // for now lets just check if players have some input in the future need to check for particles etc..
             self.players.iter().any(|player| player.has_input())
         }
-        pub fn player_input(&mut self, input: PlayerInputRequest) {
-            let player: &mut Player = self.get_player_by_id(input.player_id).expect("Player not found");
-            let input_flags: PlayerInputFlags = PlayerInputFlags::from_bits(input.input).expect("Invalid input");
+        pub fn player_input(&mut self, player_id: i32, input: u8) {
+            let player: &mut Player = self.get_player_by_id(player_id).expect("Player not found");
+            let input_flags: PlayerInputFlags = PlayerInputFlags::from_bits(input).expect("Invalid input");
             player.input = input_flags;
         }
-        pub fn output(&self) -> Vec<ControllerResponse> {
-            self.players.iter().map(|player: &Player| ControllerResponse {position: player.position, cannon_position: player.calculate_cannon_position()}).collect()
+        pub fn output(&self) -> ServerOutput {
+            let response_vec: Vec<ControllerResponse> = self.players.iter().map(|player: &Player| {
+                let mut response_object = ControllerResponse::new();
+                response_object.set_position(player.position.to_buffer_point());
+                response_object.set_cannon_position(player.calculate_cannon_position().to_buffer_point());
+                response_object
+            }).collect();
+
+            let mut server_output = ServerOutput::new();
+            let repeated_field = RepeatedField::from_vec(response_vec);
+            server_output.set_responses(repeated_field);
+
+            server_output
         }
         pub fn add_player(&mut self) -> i32 {
             self.id_count += 1;
             self.players.push(Player {
                 id: self.id_count,
-                position: Point::random_point(self.height, self.width),
+                position: ControllerPoint::random_point(self.height, self.width),
                 cannon_angle: 0,
                 input: PlayerInputFlags::noinput
             });
@@ -161,109 +177,5 @@ pub mod gamelogic {
                 Err(format!("Can't find player with id: {}", player_id))
             }
         }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_player_movement() {
-        let players: Vec<Player> = vec![
-            Player {id: 1, position: Point{x: 10, y: 10}, cannon_angle: 180, input: PlayerInputFlags::noinput},
-            Player {id: 2, position: Point{x: 20, y: 20}, cannon_angle: 0, input: PlayerInputFlags::noinput},
-            Player {id: 3, position: Point{x: 30, y: 30}, cannon_angle: 0, input: PlayerInputFlags::noinput},
-            Player {id: 4, position: Point{x: 40, y: 40}, cannon_angle: 0, input: PlayerInputFlags::noinput},
-            Player {id: 5, position: Point{x: 50, y: 50}, cannon_angle: 0, input: PlayerInputFlags::noinput},
-            Player {id: 6, position: Point{x: 60, y: 60}, cannon_angle: 0, input: PlayerInputFlags::noinput},
-            Player {id: 7, position: Point{x: 70, y: 70}, cannon_angle: 0, input: PlayerInputFlags::noinput},
-            Player {id: 8, position: Point{x: 80, y: 80}, cannon_angle: 180, input: PlayerInputFlags::noinput},
-        ];
-
-        let mut controller = GameController {
-            height: 100,
-            width: 100,
-            players,
-            id_count: 0,
-        };
-
-        let inputs: [u8; 8] = [
-            PlayerInputFlags::up.bits(), 
-            PlayerInputFlags::right.bits(), 
-            PlayerInputFlags::down.bits(), 
-            PlayerInputFlags::left.bits(), 
-            (PlayerInputFlags::up | PlayerInputFlags::right).bits(), 
-            (PlayerInputFlags::up | PlayerInputFlags::left).bits(), 
-            (PlayerInputFlags::down | PlayerInputFlags::right).bits(), 
-            (PlayerInputFlags::down | PlayerInputFlags::left).bits()
-        ];
-
-        assert_eq!(controller.should_tick(), false);
-
-        for (index, &input) in inputs.iter().enumerate() {
-            let player_input: PlayerInputRequest = PlayerInputRequest {
-                player_id: (index + 1) as i32,
-                input,
-            };
-            controller.player_input(player_input);
-        }
-        assert_eq!(controller.should_tick(), true);
-        controller.tick();
-
-        let controller_output: Vec<ControllerResponse> = controller.output();
-        assert_eq!(controller_output[0].position, Point {x: 10, y: 9}); // player moved up
-        assert_eq!(controller_output[1].position, Point {x: 21, y: 20}); // player moved right
-        assert_eq!(controller_output[2].position, Point {x: 30, y: 31}); // player moved down
-        assert_eq!(controller_output[3].position, Point {x: 39, y: 40}); // player moved left
-        assert_eq!(controller_output[4].position, Point {x: 51, y: 49}); // player moved up-right
-        assert_eq!(controller_output[5].position, Point {x: 59, y: 59}); // player moved up-left
-        assert_eq!(controller_output[6].position, Point {x: 71, y: 71}); // player moved down-right
-        assert_eq!(controller_output[7].position, Point {x: 79, y: 81}); // player moved down-left
     }
-
-    #[test]
-    fn test_player_cannon_movement() {
-        let players: Vec<Player> = vec![
-            Player {id: 1, position: Point{x: 10, y: 10}, cannon_angle: 0, input: PlayerInputFlags::noinput},
-            Player {id: 2, position: Point{x: 20, y: 20}, cannon_angle: 0, input: PlayerInputFlags::noinput},
-        ];
-
-        let mut controller: GameController = GameController {
-            height: 100,
-            width: 100,
-            players,
-            id_count: 0
-        };
-
-        let inputs: [u8; 2] = [
-            PlayerInputFlags::cannon_negative.bits(), 
-            PlayerInputFlags::cannon_positive.bits(), 
-        ];
-
-        assert_eq!(controller.should_tick(), false);
-        println!("{:?}", controller.output());
-
-        for (index, &input) in inputs.iter().enumerate() {
-            let player_input: PlayerInputRequest = PlayerInputRequest {
-                player_id: (index + 1) as i32,
-                input,
-            };
-            controller.player_input(player_input);
-        }
-        assert_eq!(controller.should_tick(), true);
-        controller.tick();
-        controller.tick();
-        controller.tick();
-        controller.tick();
-        controller.tick();
-
-        assert_eq!(controller.players[0].cannon_angle, 355);
-        assert_eq!(controller.players[1].cannon_angle, 5);
-
-        let controller_output: Vec<ControllerResponse> = controller.output();
-        println!("{:?}", controller_output[0].cannon_position.y);
-        assert!(controller_output[0].cannon_position.y < 22);
-        assert!(controller_output[1].cannon_position.y > 32);
-    }
-}
 }

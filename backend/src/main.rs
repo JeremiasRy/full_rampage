@@ -1,18 +1,23 @@
 use std::collections::HashMap;
-use std::process::Output;
+use std::io::Read;
 use std::time::Duration;
-use std::{borrow::Borrow, sync::Arc};
-use mini_redis::Connection;
+use std::sync::Arc;
+use protobuf::{Message, RepeatedField};
 use tokio::sync::Mutex;
 use futures_util::stream::{SplitSink, StreamExt};
 use futures_util::SinkExt;
 use tokio::net::{TcpListener, TcpStream};
 use tokio::time::Instant;
-use tokio_tungstenite::{accept_async, tungstenite::protocol::Message, WebSocketStream};
-use backend::gamelogic::{GameController, PlayerInputRequest};
+use tokio_tungstenite::{accept_async, WebSocketStream};
+use backend::gamelogic::GameController;
+use backend::ServerOutput;
+use backend::ControllerResponse;
+use backend::InputRequest;
+use backend::PlayerId;
+
 
 type GameControllerArc = Arc<Mutex<GameController>>;
-type TcpStreamWriteArc = Arc<Mutex<SplitSink<WebSocketStream<TcpStream>, Message>>>;
+type TcpStreamWriteArc = Arc<Mutex<SplitSink<WebSocketStream<TcpStream>, tokio_tungstenite::tungstenite::Message>>>;
 type ConnectionPool = Arc<Mutex<HashMap<i32, TcpStreamWriteArc>>>;
 
 #[tokio::main]
@@ -50,10 +55,11 @@ async fn game_controller_updater(game_controller: GameControllerArc, connection_
             let connections = connection_pool.lock().await;
             controller.tick();
 
-            let output = controller.output();
+            let output: ServerOutput = controller.output();
+
             for write_arc in connections.values() {
                 let mut write = write_arc.lock().await;
-                let _ = write.send(Message::Text(String::from(serde_json::to_string(&output).unwrap()))).await;
+                let _ = write.send(tokio_tungstenite::tungstenite::Message::binary(output.write_to_bytes().unwrap())).await;
             };
         }
     }
@@ -78,7 +84,12 @@ async fn handle_connection_inner(stream: TcpStream, game_controller: GameControl
     { // add the new player to the game controller
         let mut controller = game_state.lock().await;
         connection_player_index = controller.add_player();
-        let _ = write.send(Message::Text(connection_player_index.to_string())).await;
+        
+        let mut message = PlayerId::new();
+        message.set_player_id(connection_player_index);
+        
+        let bytes = message.write_to_bytes().unwrap();
+        let _ = write.send(tokio_tungstenite::tungstenite::Message::Binary(bytes)).await;
     }
 
     { // store the write to the connection pool so that we can send messages to it from the game state updater thread
@@ -87,15 +98,12 @@ async fn handle_connection_inner(stream: TcpStream, game_controller: GameControl
     }
 
     while let Some(Ok(msg)) = read.next().await {
-        if let Ok(json) = msg.into_text() {
-            let parsed_input = serde_json::from_str(&json);
-            match parsed_input {
-                Ok(res) => {
-                    let mut controller = game_state.lock().await;
-                    controller.player_input(res);
-                },
-                Err(e) => println!("Things went south: {:?}", e)
-            }
+        if msg.is_binary() {
+            let input_request:InputRequest = InputRequest::parse_from_bytes(&msg.into_data()).unwrap();
+            println!("input player id: {}, input i32: {}", input_request.player_id, input_request.input);
+
+            let mut controller = game_state.lock().await;
+            controller.player_input(input_request.player_id, input_request.input.try_into().unwrap());
         }
     }
 

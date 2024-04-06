@@ -47,29 +47,32 @@ function App() {
       return;
     }
     const payload = {
-      player_id: id,
+      playerId: id,
       input: keysArray.reduce((a, b) => a + b, 0),
     };
 
     const message = inputRequest.current?.create(payload);
+
     if (!message) {
       return;
     }
     const buffer = inputRequest.current?.encode(message).finish();
-    connection.current?.send(buffer?.buffer!);
+
+    if (!buffer) {
+      return;
+    }
+    connection.current?.send(buffer);
     setSentInputs(keysArray);
   }, [keysDown]);
 
   useEffect(() => {
     proto.load("messages.proto", (err, root) => {
-      console.log(err);
+      if (err) {
+        console.log(err);
+      }
       inputRequest.current = root?.lookupType("InputRequest") || null;
       idResponse.current = root?.lookupType("PlayerId") || null;
       frameResponse.current = root?.lookupType("ServerOutput") || null;
-
-      console.log(inputRequest.current);
-      console.log(idResponse.current);
-      console.log(frameResponse.current);
     });
 
     const socket = new WebSocket("ws://127.0.0.1:9999");
@@ -81,16 +84,31 @@ function App() {
       console.log("things went south  ", e);
     });
 
-    socket.addEventListener("message", (event): void => {
-      const isId = idResponse.current?.verify(event.data);
-      if (isId) {
-        setId(parseInt(isId));
-        return;
+    socket.addEventListener("message", async (event): Promise<void> => {
+      const data = event.data as Blob;
+      const uintArr = new Uint8Array(await data.arrayBuffer());
+
+      if (id === 0) {
+        console.log("lets set id");
+        let isId = idResponse.current?.decode(uintArr);
+        if (isId) {
+          const { playerId: id } = {
+            ...(isId as unknown as { playerId: number }),
+          };
+          setId(id);
+          return;
+        }
       }
 
-      const isFrame = frameResponse.current?.verify(event.data);
+      const isFrame = frameResponse.current?.decode(uintArr);
+      const { responses: frames } = {
+        ...(isFrame as unknown as {
+          responses: { cannonPosition: Position; position: Position }[];
+        }),
+      };
+      console.log(frames);
 
-      setFrame(isFrame as unknown as Frame[]);
+      setFrame(frames as unknown as Frame[]);
     });
 
     document.addEventListener("keydown", handleKeyDown);
