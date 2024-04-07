@@ -1,7 +1,14 @@
 syntax = "proto3";
 
+enum MessageType {
+    normal = 0;
+    frame = 1;
+    id_response = 2;
+}
+
 message PlayerId {
-    int32 player_id = 1;
+    MessageType type = 1;
+    int32 player_id = 2;
 }
 
 message Point {
@@ -20,5 +27,6 @@ message ControllerResponse {
 }
 
 message ServerOutput {
-    repeated ControllerResponse responses = 1;
+    MessageType type = 1;
+    repeated ControllerResponse responses = 2;
 }

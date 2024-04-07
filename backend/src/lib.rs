@@ -5,14 +5,12 @@ pub mod gamelogic {
     use protobuf::RepeatedField;
     use rand::{thread_rng, Rng};
     use serde::Serialize;
-    use tokio_tungstenite::tungstenite::http::response;
+    use crate::{ServerOutput, ControllerResponse, Point};
     const PLAYER_SIZE: i32 = 25;
     const CANNON_LENGTH: i32 = 25;
-    type ServerOutput = crate::ServerOutput;
-    type ControllerResponse = crate::ControllerResponse;
+
     type InputRequest = crate::InputRequest;
     type PlayerId = crate::PlayerId;
-    type Point = crate::Point;
 
     bitflags! {
         #[derive(Debug)]
@@ -137,9 +135,9 @@ pub mod gamelogic {
         pub fn should_tick(&self) -> bool { // for now lets just check if players have some input in the future need to check for particles etc..
             self.players.iter().any(|player| player.has_input())
         }
-        pub fn player_input(&mut self, player_id: i32, input: u8) {
-            let player: &mut Player = self.get_player_by_id(player_id).expect("Player not found");
-            let input_flags: PlayerInputFlags = PlayerInputFlags::from_bits(input).expect("Invalid input");
+        pub fn player_input(&mut self, input: InputRequest) {
+            let player: &mut Player = self.get_player_by_id(input.player_id).expect("Player not found");
+            let input_flags: PlayerInputFlags = PlayerInputFlags::from_bits(input.input.try_into().unwrap()).expect("Invalid input");
             player.input = input_flags;
         }
         pub fn output(&self) -> ServerOutput {
@@ -153,6 +151,7 @@ pub mod gamelogic {
             let mut server_output = ServerOutput::new();
             let repeated_field = RepeatedField::from_vec(response_vec);
             server_output.set_responses(repeated_field);
+            server_output.set_field_type(crate::MessageType::frame);
 
             server_output
         }

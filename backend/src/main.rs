@@ -11,10 +11,8 @@ use tokio::time::Instant;
 use tokio_tungstenite::{accept_async, WebSocketStream};
 use backend::gamelogic::GameController;
 use backend::ServerOutput;
-use backend::ControllerResponse;
 use backend::InputRequest;
 use backend::PlayerId;
-
 
 type GameControllerArc = Arc<Mutex<GameController>>;
 type TcpStreamWriteArc = Arc<Mutex<SplitSink<WebSocketStream<TcpStream>, tokio_tungstenite::tungstenite::Message>>>;
@@ -87,6 +85,7 @@ async fn handle_connection_inner(stream: TcpStream, game_controller: GameControl
         
         let mut message = PlayerId::new();
         message.set_player_id(connection_player_index);
+        message.set_field_type(backend::MessageType::id_response);
         
         let bytes = message.write_to_bytes().unwrap();
         let _ = write.send(tokio_tungstenite::tungstenite::Message::Binary(bytes)).await;
@@ -103,7 +102,7 @@ async fn handle_connection_inner(stream: TcpStream, game_controller: GameControl
             println!("input player id: {}, input i32: {}", input_request.player_id, input_request.input);
 
             let mut controller = game_state.lock().await;
-            controller.player_input(input_request.player_id, input_request.input.try_into().unwrap());
+            controller.player_input(input_request);
         }
     }
 

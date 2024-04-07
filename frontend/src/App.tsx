@@ -1,9 +1,14 @@
 import GameWindow from "./components/GameWindow";
 import { validInputs } from "./types/input";
-import { isValidInput } from "./utils/helpers";
+import {
+  isValidInput,
+  makeDecodedObjectIntoNiceTypescriptObject,
+  typeOfMessage,
+} from "./utils/helpers";
 import { useEffect, useRef, useState } from "react";
 import isEqual from "lodash/isEqual";
 import proto from "protobufjs";
+import { Frame, PlayerId, ProtobufType, ServerOutput } from "./types/responses";
 
 function App() {
   const [keysDown, setKeysDown] = useState<Set<number>>(new Set());
@@ -11,9 +16,23 @@ function App() {
   const [id, setId] = useState(0);
   const [frame, setFrame] = useState<Frame[]>([]);
   const connection = useRef<WebSocket | null>(null);
-  const inputRequest = useRef<proto.Type | null>(null);
-  const idResponse = useRef<proto.Type | null>(null);
-  const frameResponse = useRef<proto.Type | null>(null);
+  const protoRoot = useRef<proto.Root | null>(null);
+
+  function giveMeTheRightProtoForTheJob(
+    protobufType: ProtobufType
+  ): proto.Type | undefined {
+    if (!protoRoot.current) {
+      return;
+    }
+    switch (protobufType) {
+      case ProtobufType.Frame:
+        return protoRoot.current.lookupType("ServerOutput");
+      case ProtobufType.IdResponse:
+        return protoRoot.current.lookupType("PlayerId");
+      case ProtobufType.InputRequest:
+        return protoRoot.current.lookupType("InputRequest");
+    }
+  }
 
   function handleKeyDown(event: KeyboardEvent) {
     event.preventDefault();
@@ -42,8 +61,14 @@ function App() {
   // Send users inputs from keysDown to backend for processing
   useEffect(() => {
     const keysArray = Array.from(keysDown);
+    const inputProto = giveMeTheRightProtoForTheJob(ProtobufType.InputRequest);
 
-    if (id == 0 || isEqual(keysArray, sentInputs)) {
+    if (
+      !connection.current ||
+      !inputProto ||
+      id == 0 ||
+      isEqual(keysArray, sentInputs)
+    ) {
       return;
     }
     const payload = {
@@ -51,17 +76,19 @@ function App() {
       input: keysArray.reduce((a, b) => a + b, 0),
     };
 
-    const message = inputRequest.current?.create(payload);
+    console.log(payload);
+
+    const message = inputProto.create(payload);
 
     if (!message) {
-      return;
+      throw Error("Failed to create the message");
     }
-    const buffer = inputRequest.current?.encode(message).finish();
+    const buffer = inputProto.encode(message).finish();
 
     if (!buffer) {
-      return;
+      throw Error("Failed to encode message to binary");
     }
-    connection.current?.send(buffer);
+    connection.current.send(buffer);
     setSentInputs(keysArray);
   }, [keysDown]);
 
@@ -70,9 +97,7 @@ function App() {
       if (err) {
         console.log(err);
       }
-      inputRequest.current = root?.lookupType("InputRequest") || null;
-      idResponse.current = root?.lookupType("PlayerId") || null;
-      frameResponse.current = root?.lookupType("ServerOutput") || null;
+      protoRoot.current = root || null;
     });
 
     const socket = new WebSocket("ws://127.0.0.1:9999");
@@ -88,27 +113,39 @@ function App() {
       const data = event.data as Blob;
       const uintArr = new Uint8Array(await data.arrayBuffer());
 
-      if (id === 0) {
-        console.log("lets set id");
-        let isId = idResponse.current?.decode(uintArr);
-        if (isId) {
-          const { playerId: id } = {
-            ...(isId as unknown as { playerId: number }),
-          };
-          setId(id);
-          return;
-        }
+      let proto = giveMeTheRightProtoForTheJob(
+        id === 0 ? ProtobufType.IdResponse : ProtobufType.Frame
+      );
+
+      let decoded = proto?.decode(uintArr);
+      console.log(decoded);
+      if (!decoded) {
+        return;
+      }
+      const messageType = typeOfMessage(decoded!);
+      proto = giveMeTheRightProtoForTheJob(messageType);
+
+      if (messageType === ProtobufType.IdResponse) {
+        const playerId = makeDecodedObjectIntoNiceTypescriptObject(
+          decoded,
+          messageType
+        ) as PlayerId;
+        setId(playerId.playerId);
+        return;
       }
 
-      const isFrame = frameResponse.current?.decode(uintArr);
-      const { responses: frames } = {
-        ...(isFrame as unknown as {
-          responses: { cannonPosition: Position; position: Position }[];
-        }),
-      };
-      console.log(frames);
+      if (messageType === ProtobufType.Frame) {
+        decoded = proto?.decode(uintArr);
+        const { frames } = {
+          ...(makeDecodedObjectIntoNiceTypescriptObject(
+            decoded!,
+            messageType
+          ) as ServerOutput),
+        };
 
-      setFrame(frames as unknown as Frame[]);
+        setFrame(frames);
+        return;
+      }
     });
 
     document.addEventListener("keydown", handleKeyDown);
