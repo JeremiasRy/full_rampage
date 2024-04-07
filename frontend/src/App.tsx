@@ -38,6 +38,10 @@ function App() {
     });
   }
 
+  function handleVisibilityChange() {
+    setKeysDown(new Set());
+  }
+
   // Send users inputs from keysDown to backend for processing
   useEffect(() => {
     const keysArray = Array.from(keysDown);
@@ -82,13 +86,6 @@ function App() {
     protoLoad();
 
     const socket = new WebSocket("ws://127.0.0.1:9999");
-    socket.addEventListener("open", () => {
-      console.log("We are open!");
-    });
-
-    socket.addEventListener("error", (e) => {
-      console.log("things went south  ", e);
-    });
 
     socket.addEventListener("message", async (event): Promise<void> => {
       if (!protoRoot || !protoEnum) {
@@ -132,6 +129,8 @@ function App() {
 
     document.addEventListener("keydown", handleKeyDown);
     document.addEventListener("keyup", handleKeyUp);
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    window.addEventListener("blur", handleVisibilityChange);
 
     connection.current = socket;
 

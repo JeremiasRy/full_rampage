@@ -29,7 +29,6 @@ async fn main() {
     println!("Server running at {}!", addr);
     tokio::spawn(game_controller_updater(game_controller.clone(), connection_pool.clone()));
     while let Ok((stream, addr)) = listener.accept().await {
-        println!("Incoming traffic {}", addr);
 
         let game_controller = game_controller.clone();
         let connection_pool = connection_pool.clone();
@@ -38,7 +37,7 @@ async fn main() {
 }
 
 async fn game_controller_updater(game_controller: GameControllerArc, connection_pool: ConnectionPool) {
-    let tick_rate = Duration::from_secs_f64(1.0 / 60.0); // 60 fps
+    let tick_rate = Duration::from_secs_f64(1.0 / 120.0); // 120 fps
     let mut last_tick = Instant::now();
     loop {
 
@@ -89,6 +88,7 @@ async fn handle_connection_inner(stream: TcpStream, game_controller: GameControl
         
         let bytes = message.write_to_bytes().unwrap();
         let _ = write.send(tokio_tungstenite::tungstenite::Message::Binary(bytes)).await;
+        let _ = write.send(tokio_tungstenite::tungstenite::Message::Binary(controller.output().write_to_bytes().unwrap())).await;
     }
 
     { // store the write to the connection pool so that we can send messages to it from the game state updater thread
@@ -99,8 +99,6 @@ async fn handle_connection_inner(stream: TcpStream, game_controller: GameControl
     while let Some(Ok(msg)) = read.next().await {
         if msg.is_binary() {
             let input_request:InputRequest = InputRequest::parse_from_bytes(&msg.into_data()).unwrap();
-            println!("input player id: {}, input i32: {}", input_request.player_id, input_request.input);
-
             let mut controller = game_state.lock().await;
             controller.player_input(input_request);
         }
