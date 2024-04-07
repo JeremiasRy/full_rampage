@@ -1,10 +1,6 @@
 import GameWindow from "./components/GameWindow";
 import { validInputs } from "./types/input";
-import {
-  isValidInput,
-  makeDecodedObjectIntoNiceTypescriptObject,
-  typeOfMessage,
-} from "./utils/helpers";
+import { isValidInput } from "./utils/helpers";
 import { useEffect, useRef, useState } from "react";
 import isEqual from "lodash/isEqual";
 import proto from "protobufjs";
@@ -16,23 +12,7 @@ function App() {
   const [id, setId] = useState(0);
   const [frame, setFrame] = useState<Frame[]>([]);
   const connection = useRef<WebSocket | null>(null);
-  const protoRoot = useRef<proto.Root | null>(null);
-
-  function giveMeTheRightProtoForTheJob(
-    protobufType: ProtobufType
-  ): proto.Type | undefined {
-    if (!protoRoot.current) {
-      return;
-    }
-    switch (protobufType) {
-      case ProtobufType.Frame:
-        return protoRoot.current.lookupType("ServerOutput");
-      case ProtobufType.IdResponse:
-        return protoRoot.current.lookupType("PlayerId");
-      case ProtobufType.InputRequest:
-        return protoRoot.current.lookupType("InputRequest");
-    }
-  }
+  const protoRootRef = useRef<proto.Root>();
 
   function handleKeyDown(event: KeyboardEvent) {
     event.preventDefault();
@@ -61,11 +41,10 @@ function App() {
   // Send users inputs from keysDown to backend for processing
   useEffect(() => {
     const keysArray = Array.from(keysDown);
-    const inputProto = giveMeTheRightProtoForTheJob(ProtobufType.InputRequest);
 
     if (
       !connection.current ||
-      !inputProto ||
+      !protoRootRef.current ||
       id == 0 ||
       isEqual(keysArray, sentInputs)
     ) {
@@ -76,29 +55,31 @@ function App() {
       input: keysArray.reduce((a, b) => a + b, 0),
     };
 
-    console.log(payload);
+    const message = protoRootRef.current
+      .lookupType("InputRequest")
+      .encode(payload)
+      .finish();
 
-    const message = inputProto.create(payload);
-
-    if (!message) {
-      throw Error("Failed to create the message");
-    }
-    const buffer = inputProto.encode(message).finish();
-
-    if (!buffer) {
-      throw Error("Failed to encode message to binary");
-    }
-    connection.current.send(buffer);
+    connection.current.send(message);
     setSentInputs(keysArray);
   }, [keysDown]);
 
   useEffect(() => {
-    proto.load("messages.proto", (err, root) => {
-      if (err) {
-        console.log(err);
+    let protoRoot: proto.Root;
+    let protoEnum: proto.Enum;
+
+    const protoLoad = async () => {
+      try {
+        const root = await proto.load("messages.proto");
+        protoRoot = root;
+        protoEnum = root.lookupEnum("MessageType");
+        protoRootRef.current = protoRoot;
+      } catch (e) {
+        Error(`Failed to load proto: ${e}`);
       }
-      protoRoot.current = root || null;
-    });
+    };
+
+    protoLoad();
 
     const socket = new WebSocket("ws://127.0.0.1:9999");
     socket.addEventListener("open", () => {
@@ -110,42 +91,43 @@ function App() {
     });
 
     socket.addEventListener("message", async (event): Promise<void> => {
+      if (!protoRoot || !protoEnum) {
+        throw Error("protos not loaded correctly");
+      }
       const data = event.data as Blob;
-      const uintArr = new Uint8Array(await data.arrayBuffer());
+      const reader = new FileReader();
+      reader.readAsArrayBuffer(data);
 
-      let proto = giveMeTheRightProtoForTheJob(
-        id === 0 ? ProtobufType.IdResponse : ProtobufType.Frame
-      );
-
-      let decoded = proto?.decode(uintArr);
-      console.log(decoded);
-      if (!decoded) {
-        return;
-      }
-      const messageType = typeOfMessage(decoded!);
-      proto = giveMeTheRightProtoForTheJob(messageType);
-
-      if (messageType === ProtobufType.IdResponse) {
-        const playerId = makeDecodedObjectIntoNiceTypescriptObject(
-          decoded,
-          messageType
-        ) as PlayerId;
-        setId(playerId.playerId);
-        return;
-      }
-
-      if (messageType === ProtobufType.Frame) {
-        decoded = proto?.decode(uintArr);
-        const { frames } = {
-          ...(makeDecodedObjectIntoNiceTypescriptObject(
-            decoded!,
-            messageType
-          ) as ServerOutput),
-        };
-
-        setFrame(frames);
-        return;
-      }
+      reader.onload = async () => {
+        const arrayBuffer = reader.result;
+        if (arrayBuffer && typeof arrayBuffer !== "string") {
+          const uintArr = new Uint8Array(arrayBuffer);
+          const messageFlag = uintArr[1];
+          if (messageFlag === 2) {
+            const { playerId } = {
+              ...(protoRoot
+                .lookupType("PlayerId")
+                .decode(uintArr) as unknown as {
+                playerId: number;
+                type: number;
+              }),
+            };
+            setId(playerId);
+            return;
+          }
+          if (messageFlag === 1) {
+            const { responses } = {
+              ...(protoRoot
+                .lookupType("ServerOutput")
+                .decode(uintArr) as unknown as {
+                type: number;
+                responses: Frame[];
+              }),
+            };
+            setFrame(responses);
+          }
+        }
+      };
     });
 
     document.addEventListener("keydown", handleKeyDown);

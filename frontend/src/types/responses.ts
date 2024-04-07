@@ -9,7 +9,7 @@ export type PlayerId = {
 
 export type Frame = {
   position: Position;
-  cannon_position: Position;
+  cannonPosition: Position;
 };
 export type Position = {
   x: number;
