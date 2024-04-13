@@ -4,13 +4,20 @@ import { isValidInput } from "./utils/helpers";
 import { useEffect, useRef, useState } from "react";
 import isEqual from "lodash/isEqual";
 import proto from "protobufjs";
-import { Frame, PlayerId, ProtobufType, ServerOutput } from "./types/responses";
+import {
+  PlayerResponse,
+  ServerOutput,
+  CannonShotResponse,
+} from "./types/responses";
 
 function App() {
   const [keysDown, setKeysDown] = useState<Set<number>>(new Set());
   const [sentInputs, setSentInputs] = useState<number[]>([]);
   const [id, setId] = useState(0);
-  const [frame, setFrame] = useState<Frame[]>([]);
+  const [serverOutput, setServerOutput] = useState<ServerOutput>({
+    players: [],
+    shots: [],
+  });
   const connection = useRef<WebSocket | null>(null);
   const protoRootRef = useRef<proto.Root>();
 
@@ -113,15 +120,19 @@ function App() {
             return;
           }
           if (messageFlag === 1) {
-            const { responses } = {
+            const { players, shots } = {
               ...(protoRoot
                 .lookupType("ServerOutput")
                 .decode(uintArr) as unknown as {
                 type: number;
-                responses: Frame[];
+                players: PlayerResponse[];
+                shots: CannonShotResponse[];
               }),
             };
-            setFrame(responses);
+            setServerOutput({
+              players,
+              shots,
+            });
           }
         }
       };
@@ -141,7 +152,7 @@ function App() {
     };
   }, []);
 
-  return <GameWindow frame={frame} />;
+  return <GameWindow serverOutput={serverOutput} />;
 }
 
 export default App;

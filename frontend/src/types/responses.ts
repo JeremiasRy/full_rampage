@@ -1,5 +1,6 @@
 export type ServerOutput = {
-  frames: Frame[];
+  players: PlayerResponse[];
+  shots: CannonShotResponse[];
 };
 
 export type PlayerId = {
@@ -7,9 +8,13 @@ export type PlayerId = {
   type: number;
 };
 
-export type Frame = {
+export type PlayerResponse = {
   position: Position;
   cannonPosition: Position;
+};
+export type CannonShotResponse = {
+  position: Position;
+  size: number;
 };
 export type Position = {
   x: number;

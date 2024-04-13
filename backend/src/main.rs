@@ -28,7 +28,7 @@ async fn main() {
 
     println!("Server running at {}!", addr);
     tokio::spawn(game_controller_updater(game_controller.clone(), connection_pool.clone()));
-    while let Ok((stream, addr)) = listener.accept().await {
+    while let Ok((stream, _)) = listener.accept().await {
 
         let game_controller = game_controller.clone();
         let connection_pool = connection_pool.clone();

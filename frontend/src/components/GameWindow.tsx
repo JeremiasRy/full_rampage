@@ -1,25 +1,29 @@
 import { Stage } from "@pixi/react";
 import RampageVehicle from "./RampageVehicle";
-import { Frame } from "../types/responses";
+import Shot from "./Shot";
+import { ServerOutput } from "../types/responses";
 
-function GameWindow(props: { frame: Frame[] }) {
-  const { frame } = { ...props }; // make this into context some day
+function GameWindow(props: { serverOutput: ServerOutput }) {
+  const { players, shots } = { ...props.serverOutput }; // make this into context some day
 
   return (
     <Stage width={1200} height={800}>
-      {frame.map((fr) => (
+      {players.map((player) => (
         <RampageVehicle
           key={
-            fr.cannonPosition.x +
-            fr.cannonPosition.y +
-            fr.position.x +
-            fr.position.y
+            player.cannonPosition.x +
+            player.cannonPosition.y +
+            player.position.x +
+            player.position.y
           }
-          x={fr.position.x}
-          y={fr.position.y}
-          cannonX={fr.cannonPosition.x}
-          cannonY={fr.cannonPosition.y}
+          x={player.position.x}
+          y={player.position.y}
+          cannonX={player.cannonPosition.x}
+          cannonY={player.cannonPosition.y}
         />
+      ))}
+      {shots.map((shot) => (
+        <Shot x={shot.position.x} y={shot.position.y} size={0} />
       ))}
     </Stage>
   );

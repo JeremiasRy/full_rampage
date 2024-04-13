@@ -13,7 +13,7 @@ function getCenter(vehicle: RampageVehicleProps) {
   return { centerX: vehicle.x + 25 / 2, centerY: vehicle.y + 25 / 2 };
 }
 
-function drawRampageVehicle(props: RampageVehicleProps) {
+function DrawRampageVehicle(props: RampageVehicleProps) {
   const drawProps = useMemo(() => {
     return { ...props };
   }, [props.x, props.y, props.cannonX, props.cannonY]);
@@ -39,4 +39,4 @@ function drawRampageVehicle(props: RampageVehicleProps) {
   return <GraphicsComponent draw={draw} />;
 }
 
-export default drawRampageVehicle;
+export default DrawRampageVehicle;

@@ -21,12 +21,18 @@ message InputRequest {
     int32 input = 2;
 }
 
-message ControllerResponse {
+message PlayerResponse {
     Point position = 1;
     Point cannon_position = 2;
 }
 
+message CannonShotResponse {
+    Point position = 1;
+    int32 size = 2;
+}
+
 message ServerOutput {
     MessageType type = 1;
-    repeated ControllerResponse responses = 2;
+    repeated PlayerResponse players = 2;
+    repeated CannonShotResponse shots = 3;
 }

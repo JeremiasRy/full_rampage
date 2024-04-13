@@ -5,6 +5,7 @@ export const validInputs = {
   ArrowLeft: () => parseInt("1000", 2),
   KeyZ: () => parseInt("10000", 2),
   KeyX: () => parseInt("100000", 2),
+  Space: () => parseInt("1000000", 2),
 } as const;
 
 export type ValidInput = ReturnType<
