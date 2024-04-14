@@ -40,6 +40,9 @@ function App() {
     const parsedInput = validInputs[event.code]();
     setKeysDown((prevKeys) => {
       const updatedSet = new Set(prevKeys);
+      if (parsedInput == 1 << 6 && prevKeys.has(1 << 6)) {
+        updatedSet.add(1 << 7);
+      }
       updatedSet.delete(parsedInput);
       return updatedSet;
     });

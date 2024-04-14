@@ -5,14 +5,12 @@ pub mod gamelogic {
     use bitflags::bitflags;
     use protobuf::RepeatedField;
     use rand::{thread_rng, Rng};
-    use tokio_tungstenite::tungstenite::http::response;
     use crate::{CannonShotResponse, PlayerResponse, Point, ServerOutput};
     const PLAYER_SIZE: f32 = 25.0;
     const CANNON_LENGTH: f32 = 25.0;
     const MAX_CANNON_SHOT_LENGTH: i32 = 1000;
 
     type InputRequest = crate::InputRequest;
-    type PlayerId = crate::PlayerId;
 
     bitflags! {
         #[derive(Debug)]
@@ -24,7 +22,8 @@ pub mod gamelogic {
             const left = 0b001000;
             const cannon_positive = 0b010000;
             const cannon_negative = 0b100000;
-            const fire = 0b1000000;
+            const load_cannon = 0b1000000;
+            const fire = 0b10000000;
         }
     }
     #[derive(Debug, Clone, Copy, PartialEq)]
@@ -108,15 +107,8 @@ pub mod gamelogic {
             }
         }
         pub fn has_input(&self) -> bool {
-            self.input.bits() > 0
+            self.cannon_shot.is_some() || self.input.bits() > 0
         }
-        pub fn take_cannon_shot(&mut self) -> Result<CannonShot, ()> {
-            if let Some(cannon_shot) = self.cannon_shot.take() {
-                return Ok(cannon_shot)
-            }
-            Err(())
-        }
-
         pub fn tick(&mut self) {
             let mut dx: f32 = 0.0;
             let mut dy: f32 = 0.0;
@@ -140,9 +132,11 @@ pub mod gamelogic {
             if self.input.contains(PlayerInputFlags::cannon_negative) {
                 da -= 1.0;
             }
-            if self.input.contains(PlayerInputFlags::fire) && !self.is_loading_cannon {
+            if self.input.contains(PlayerInputFlags::load_cannon) && !self.is_loading_cannon {
                 self.is_loading_cannon = true;
-            } else if !self.input.contains(PlayerInputFlags::fire) && self.is_loading_cannon {
+            }
+            
+            if !self.input.contains(PlayerInputFlags::load_cannon) && self.is_loading_cannon {
                 self.cannon_shot = Some(CannonShot::new(self.position, self.cannon_angle, self.power_loaded));
                 self.is_loading_cannon = false;
                 self.power_loaded = 25;
@@ -194,14 +188,15 @@ pub mod gamelogic {
         pub fn tick(&mut self) {
             for player in self.players.iter_mut() {
                 if player.has_input() {
-                    player.tick()
+                    player.tick();
+                    if let Some(cannon_shot) = player.cannon_shot.take() {
+                        self.cannon_shots.push(cannon_shot);
+                    }
                 }
-                if let Ok(cannon_shot) = player.take_cannon_shot() {
-                    self.cannon_shots.push(cannon_shot)
-                }
+                
             }
         }
-        pub fn should_tick(&self) -> bool { // for now lets just check if players have some input in the future need to check for particles etc..
+        pub fn should_tick(&self) -> bool {
             self.cannon_shots.len() > 0 || self.players.iter().any(|player| player.has_input())
         }
         pub fn player_input(&mut self, input: InputRequest) {
@@ -233,7 +228,6 @@ pub mod gamelogic {
             let mut server_output = ServerOutput::new();
             let players = RepeatedField::from_vec(player_response_vec);
             let cannon_shots = RepeatedField::from_vec(cannon_shot_response_vec);
-            // println!("shots in server output: {:?}", cannon_shots);
             server_output.set_players(players);
             server_output.set_shots(cannon_shots);
             server_output.set_field_type(crate::MessageType::frame);

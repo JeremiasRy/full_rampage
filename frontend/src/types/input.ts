@@ -1,11 +1,12 @@
 export const validInputs = {
-  ArrowUp: () => parseInt("1", 2),
-  ArrowRight: () => parseInt("10", 2),
-  ArrowDown: () => parseInt("100", 2),
-  ArrowLeft: () => parseInt("1000", 2),
-  KeyZ: () => parseInt("10000", 2),
-  KeyX: () => parseInt("100000", 2),
-  Space: () => parseInt("1000000", 2),
+  ArrowUp: () => 1,
+  ArrowRight: () => 1 << 1,
+  ArrowDown: () => 1 << 2,
+  ArrowLeft: () => 1 << 3,
+  KeyZ: () => 1 << 4,
+  KeyX: () => 1 << 5,
+  Space: () => 1 << 6,
+  Fire: () => 1 << 7,
 } as const;
 
 export type ValidInput = ReturnType<

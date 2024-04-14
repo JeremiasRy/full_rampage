@@ -1,8 +1,7 @@
 use std::collections::HashMap;
-use std::io::Read;
 use std::time::Duration;
 use std::sync::Arc;
-use protobuf::{Message, RepeatedField};
+use protobuf::Message;
 use tokio::sync::Mutex;
 use futures_util::stream::{SplitSink, StreamExt};
 use futures_util::SinkExt;
@@ -104,11 +103,10 @@ async fn handle_connection_inner(stream: TcpStream, game_controller: GameControl
         }
     }
 
-    {
+    { // clean up once the connection is dropped
         let mut controller = game_state.lock().await;
         controller.drop_player(connection_player_index);
-    }
-    { // store the write to the connection pool so that we can send messages to it from the game state updater thread
+
         let mut connections = connection_pool.lock().await;
         connections.remove_entry(&connection_player_index);
     }
