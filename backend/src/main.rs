@@ -75,7 +75,7 @@ async fn handle_connection_inner(stream: TcpStream, game_controller: GameControl
     let (mut write, mut read) = incoming_stream.split();
 
 
-    let mut connection_player_index = 0;
+    let connection_player_index;
 
     { // add the new player to the game controller
         let mut controller = game_state.lock().await;
@@ -109,6 +109,7 @@ async fn handle_connection_inner(stream: TcpStream, game_controller: GameControl
 
         let mut connections = connection_pool.lock().await;
         connections.remove_entry(&connection_player_index);
+        println!("Thank you for playing!");
     }
     Ok(())
 }

@@ -54,6 +54,8 @@ pub mod gamelogic {
 
     #[derive(Debug)]
     struct CannonShot {
+        // distance_to_travel: i32, Do some calculations so that the cannon shot reaches max height at halfway through the trajectory and is largest then
+        // size: i32,
         trajectory: VecDeque<ControllerPoint>,
     }
 
@@ -189,11 +191,10 @@ pub mod gamelogic {
             for player in self.players.iter_mut() {
                 if player.has_input() {
                     player.tick();
-                    if let Some(cannon_shot) = player.cannon_shot.take() {
-                        self.cannon_shots.push(cannon_shot);
-                    }
                 }
-                
+                if let Some(cannon_shot) = player.cannon_shot.take() {
+                    self.cannon_shots.push(cannon_shot);
+                }
             }
         }
         pub fn should_tick(&self) -> bool {
