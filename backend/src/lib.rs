@@ -68,8 +68,14 @@ pub mod gamelogic {
         fn count_size(&self) -> i32 {
             let current_point_in_trajectory = self.distance_to_travel - (self.trajectory.len() as f32);
             let halfway_point = self.distance_to_travel / 2.0;
-            (100.0 - ((halfway_point - current_point_in_trajectory) / halfway_point) * 100.0) as i32
-            
+            let over_half = current_point_in_trajectory > halfway_point;
+            let mut result = (100.0 - ((halfway_point - current_point_in_trajectory) / halfway_point) * 100.0) as i32;
+
+            if over_half {
+                result = 100 - (result - 100);
+            }
+
+            result
         }
         pub fn get_pos(&mut self) -> CannonShotPosition {
             CannonShotPosition {
