@@ -2,13 +2,14 @@ include!(concat!(env!("OUT_DIR"), "/messages.rs"));
 
 pub mod gamelogic {
     use std::collections::VecDeque;
+    use std::collections::hash_map::HashMap;
     use bitflags::bitflags;
     use protobuf::RepeatedField;
     use rand::{thread_rng, Rng};
     use crate::{CannonShotResponse, PlayerResponse, Point, ServerOutput};
     const PLAYER_SIZE: f32 = 25.0;
     const CANNON_LENGTH: f32 = 25.0;
-    const MAX_CANNON_SHOT_LENGTH: i32 = 1000;
+    const MAX_CANNON_SHOT_LENGTH: i32 = 750;
 
     type InputRequest = crate::InputRequest;
 
@@ -54,21 +55,35 @@ pub mod gamelogic {
 
     #[derive(Debug)]
     struct CannonShot {
-        // distance_to_travel: i32, Do some calculations so that the cannon shot reaches max height at halfway through the trajectory and is largest then
-        // size: i32,
+        distance_to_travel: f32,
         trajectory: VecDeque<ControllerPoint>,
     }
 
+    struct CannonShotPosition {
+        size: i32,
+        position: Option<ControllerPoint>
+    }
+
     impl CannonShot {
-        pub fn get_pos(&mut self) -> Option<ControllerPoint> {
-            self.trajectory.pop_front()
+        fn count_size(&self) -> i32 {
+            let current_point_in_trajectory = self.distance_to_travel - (self.trajectory.len() as f32);
+            let halfway_point = self.distance_to_travel / 2.0;
+            (100.0 - ((halfway_point - current_point_in_trajectory) / halfway_point) * 100.0) as i32
+            
+        }
+        pub fn get_pos(&mut self) -> CannonShotPosition {
+            CannonShotPosition {
+                size: self.count_size(),
+                position: self.trajectory.pop_front(),
+            }
         }
         pub fn new(from: ControllerPoint, angle: f32, power: i32) -> CannonShot {
             let distance = MAX_CANNON_SHOT_LENGTH as f32 * (power as f32 / 100.0);
+            let step_size = (power / 10) as f32;
             let radians = angle.to_radians();
             
-            let dx = 1.0 * radians.cos();
-            let dy = 1.0 * radians.sin();
+            let dx = step_size * radians.cos();
+            let dy = step_size * radians.sin();
 
             let mut trajectory = VecDeque::<ControllerPoint>::new();
             
@@ -80,6 +95,7 @@ pub mod gamelogic {
                 current_y += dy;
             }
             CannonShot {
+                distance_to_travel: trajectory.len() as f32,
                 trajectory
             }
         }
@@ -105,7 +121,7 @@ pub mod gamelogic {
                 input: PlayerInputFlags::noinput,
                 is_loading_cannon: false,
                 cannon_shot: None,
-                power_loaded: 25,
+                power_loaded: 0,
             }
         }
         pub fn has_input(&self) -> bool {
@@ -141,7 +157,7 @@ pub mod gamelogic {
             if !self.input.contains(PlayerInputFlags::load_cannon) && self.is_loading_cannon {
                 self.cannon_shot = Some(CannonShot::new(self.position, self.cannon_angle, self.power_loaded));
                 self.is_loading_cannon = false;
-                self.power_loaded = 25;
+                self.power_loaded = 0;
             }
 
             self.position.translate(dx, dy);
@@ -173,7 +189,7 @@ pub mod gamelogic {
         height: i32,
         width: i32,
         players: Vec<Player>,
-        cannon_shots: Vec<CannonShot>,
+        cannon_shots: HashMap<i32, CannonShot>,
         id_count: i32
     }
 
@@ -184,7 +200,7 @@ pub mod gamelogic {
                 height: 800,
                 width: 1200,
                 players: Vec::<Player>::new(),
-                cannon_shots: Vec::<CannonShot>::new()
+                cannon_shots: HashMap::<i32, CannonShot>::new()
             }
         }
         pub fn tick(&mut self) {
@@ -193,7 +209,8 @@ pub mod gamelogic {
                     player.tick();
                 }
                 if let Some(cannon_shot) = player.cannon_shot.take() {
-                    self.cannon_shots.push(cannon_shot);
+                    self.id_count += 1;
+                    self.cannon_shots.insert(self.id_count, cannon_shot);
                 }
             }
         }
@@ -214,16 +231,25 @@ pub mod gamelogic {
             }).collect();
 
             let mut cannon_shot_response_vec = Vec::<CannonShotResponse>::new();
-            for cannon_shot in self.cannon_shots.as_mut_slice() {
-                match cannon_shot.get_pos() {
-                    Some(position) => {
-                        let mut new_cannon_shot_response = CannonShotResponse::new();
-                        new_cannon_shot_response.set_position(position.to_buffer_point());
-                        cannon_shot_response_vec.push(new_cannon_shot_response);
+            let mut marked_for_remove = Vec::<i32>::new();
 
-                    } // spawn exposion on the None
-                    None => (),
+            for (id, cannon_shot) in self.cannon_shots.iter_mut() {
+                let cannon_shot_state = cannon_shot.get_pos();
+
+                if let Some(position) = cannon_shot_state.position {
+                    let mut cannon_shot_response = CannonShotResponse::new();
+                    cannon_shot_response.set_position(position.to_buffer_point());
+                    cannon_shot_response.set_size(cannon_shot_state.size);
+
+                    cannon_shot_response_vec.push(cannon_shot_response);
+                } else {
+                    println!("Explosions!!");
+                    marked_for_remove.push(*id);
                 }
+            }
+
+            for id in marked_for_remove {
+                self.cannon_shots.remove_entry(&id);
             }
 
             let mut server_output = ServerOutput::new();
