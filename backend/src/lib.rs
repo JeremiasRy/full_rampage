@@ -139,29 +139,29 @@ pub mod gamelogic {
             let mut da: f32 = 0.0;
 
             if self.input.contains(PlayerInputFlags::up) {
-                dy -= 1.0;
+                dy -= 2.0;
             }
             if self.input.contains(PlayerInputFlags::down) {
-                dy += 1.0;
+                dy += 2.0;
             }
             if self.input.contains(PlayerInputFlags::right) {
-                dx += 1.0;
+                dx += 2.0;
             }
             if self.input.contains(PlayerInputFlags::left) {
-                dx -= 1.0;
+                dx -= 2.0;
             }
             if self.input.contains(PlayerInputFlags::cannon_positive) {
-                da += 1.0;
+                da += 2.0;
             }
             if self.input.contains(PlayerInputFlags::cannon_negative) {
-                da -= 1.0;
+                da -= 2.0;
             }
             if self.input.contains(PlayerInputFlags::load_cannon) && !self.is_loading_cannon {
                 self.is_loading_cannon = true;
             }
             
             if !self.input.contains(PlayerInputFlags::load_cannon) && self.is_loading_cannon {
-                self.cannon_shot = Some(CannonShot::new(self.position, self.cannon_angle, self.power_loaded));
+                self.cannon_shot = Some(CannonShot::new(self.calculate_cannon_position(), self.cannon_angle, self.power_loaded));
                 self.is_loading_cannon = false;
                 self.power_loaded = 0;
             }
