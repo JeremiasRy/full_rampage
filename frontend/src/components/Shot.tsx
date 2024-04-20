@@ -7,6 +7,7 @@ export interface ShotProps {
   y: number;
   size: number;
 }
+const MAX_SIZE = 20;
 
 function DrawShot(props: ShotProps) {
   const drawProps = useMemo(() => {
@@ -15,11 +16,14 @@ function DrawShot(props: ShotProps) {
 
   const draw = useCallback(
     (g: Graphics) => {
-      const { x, y } = {
+      const { x, y, size } = {
         ...drawProps,
       };
 
-      g.clear().beginFill(0xff3300).drawCircle(x, y, 10).endFill();
+      g.clear()
+        .beginFill(0xff3300)
+        .drawCircle(x, y, MAX_SIZE * (size / 100))
+        .endFill();
     },
     [drawProps]
   );
