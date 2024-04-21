@@ -71,14 +71,12 @@ async fn handle_connection_inner(stream: TcpStream, game_controller: GameControl
     let incoming_stream: WebSocketStream<TcpStream> = accept_async(stream).await.expect("Things went south during the handshake process");
     println!("Connection established!");
 
-    let game_state = game_controller.clone();
     let (mut write, mut read) = incoming_stream.split();
-
 
     let connection_player_index;
 
     { // add the new player to the game controller
-        let mut controller = game_state.lock().await;
+        let mut controller = game_controller.lock().await;
         connection_player_index = controller.add_player();
         
         let mut message = PlayerId::new();
@@ -88,9 +86,7 @@ async fn handle_connection_inner(stream: TcpStream, game_controller: GameControl
         let bytes = message.write_to_bytes().unwrap();
         let _ = write.send(tokio_tungstenite::tungstenite::Message::Binary(bytes)).await;
         let _ = write.send(tokio_tungstenite::tungstenite::Message::Binary(controller.output().write_to_bytes().unwrap())).await;
-    }
 
-    { // store the write to the connection pool so that we can send messages to it from the game state updater thread
         let mut connections = connection_pool.lock().await;
         connections.insert(connection_player_index, Arc::new(Mutex::new(write)));
     }
@@ -98,13 +94,13 @@ async fn handle_connection_inner(stream: TcpStream, game_controller: GameControl
     while let Some(Ok(msg)) = read.next().await {
         if msg.is_binary() {
             let input_request:InputRequest = InputRequest::parse_from_bytes(&msg.into_data()).unwrap();
-            let mut controller = game_state.lock().await;
+            let mut controller = game_controller.lock().await;
             controller.player_input(input_request);
         }
     }
 
     { // clean up once the connection is dropped
-        let mut controller = game_state.lock().await;
+        let mut controller = game_controller.lock().await;
         controller.drop_player(connection_player_index);
 
         let mut connections = connection_pool.lock().await;

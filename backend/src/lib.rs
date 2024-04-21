@@ -1,7 +1,7 @@
 include!(concat!(env!("OUT_DIR"), "/messages.rs"));
 
 pub mod gamelogic {
-    use std::collections::VecDeque;
+    use std::{borrow::BorrowMut, collections::VecDeque};
     use std::collections::hash_map::HashMap;
     use bitflags::bitflags;
     use protobuf::RepeatedField;
@@ -9,7 +9,7 @@ pub mod gamelogic {
     use crate::{CannonShotResponse, PlayerResponse, Point, ServerOutput};
     const PLAYER_SIZE: f32 = 25.0;
     const CANNON_LENGTH: f32 = 25.0;
-    const MAX_CANNON_SHOT_LENGTH: i32 = 750;
+    const MAX_CANNON_SHOT_LENGTH: i32 = 300;
 
     type InputRequest = crate::InputRequest;
 
@@ -109,7 +109,6 @@ pub mod gamelogic {
 
     #[derive(Debug)]
     struct Player {
-        id: i32,
         position: ControllerPoint,
         cannon_angle: f32,
         is_loading_cannon: bool,
@@ -121,9 +120,8 @@ pub mod gamelogic {
     }
 
     impl Player {
-        pub fn new(id: i32, max_height: i32, max_width: i32) -> Player {
+        pub fn new(max_height: i32, max_width: i32) -> Player {
             Player {
-                id,
                 position: ControllerPoint::random_point(max_height, max_width),
                 cannon_angle: 0.0,
                 input: PlayerInputFlags::noinput,
@@ -136,6 +134,9 @@ pub mod gamelogic {
         }
         pub fn should_tick(&self) -> bool {
             self.cannon_shot.is_some() || self.input.bits() > 0 || self.delta_x != 0.0 || self.delta_y != 0.0
+        }
+        pub fn input(&mut self, input:PlayerInputFlags) {
+            self.input = input
         }
         fn check_vertical(&mut self) {
             if self.input.contains(PlayerInputFlags::up) {
@@ -213,7 +214,7 @@ pub mod gamelogic {
     pub struct GameController {
         height: i32,
         width: i32,
-        players: Vec<Player>,
+        players: HashMap<i32, Player>,
         cannon_shots: HashMap<i32, CannonShot>,
         id_count: i32
     }
@@ -224,14 +225,14 @@ pub mod gamelogic {
                 id_count: 0,
                 height: 800,
                 width: 1200,
-                players: Vec::<Player>::new(),
+                players: HashMap::<i32, Player>::new(),
                 cannon_shots: HashMap::<i32, CannonShot>::new()
             }
         }
         pub fn tick(&mut self) {
-            for player in self.players.iter_mut().filter(|player| player.should_tick()) {
+            for (_, player) in self.players.iter_mut().filter(|(_, player)| player.should_tick()) {
                 player.tick();
-                
+
                 if let Some(cannon_shot) = player.cannon_shot.take() {
                     self.id_count += 1;
                     self.cannon_shots.insert(self.id_count, cannon_shot);
@@ -239,15 +240,15 @@ pub mod gamelogic {
             }
         }
         pub fn should_tick(&self) -> bool {
-            self.cannon_shots.len() > 0 || self.players.iter().any(|player| player.should_tick())
+            self.cannon_shots.len() > 0 || self.players.iter().any(|(_, player)| player.should_tick())
         }
         pub fn player_input(&mut self, input: InputRequest) {
-            let player: &mut Player = self.get_player_by_id(input.player_id).expect("Player not found");
+            let player: &mut Player = self.get_player_by_id(input.player_id);
             let input_flags: PlayerInputFlags = PlayerInputFlags::from_bits(input.input.try_into().unwrap()).expect("Invalid input");
-            player.input = input_flags;
+            player.input(input_flags);
         }
         pub fn output(&mut self) -> ServerOutput {
-            let player_response_vec: Vec<PlayerResponse> = self.players.iter().map(|player: &Player| {
+            let player_response_vec: Vec<PlayerResponse> = self.players.values_mut().map(|player| {
                 let mut response_object = PlayerResponse::new();
                 response_object.set_position(player.position.to_buffer_point());
                 response_object.set_cannon_position(player.calculate_cannon_position().to_buffer_point());
@@ -287,19 +288,14 @@ pub mod gamelogic {
         }
         pub fn add_player(&mut self) -> i32 {
             self.id_count += 1;
-            self.players.push(Player::new(self.id_count, self.height, self.width));
+            self.players.insert(self.id_count,Player::new(self.height, self.width));
             self.id_count
         }
         pub fn drop_player(&mut self, player_id: i32) {
-            let index = self.players.iter().position(|player| player.id == player_id).unwrap();
-            self.players.remove(index);
+            self.players.remove_entry(&player_id);
         }
-        fn get_player_by_id(&mut self, player_id: i32) -> Result<&mut Player, String> { // make this look nicer
-            if let Some(player) = self.players.iter_mut().find(|player| player.id == player_id) {
-                Ok(player)
-            } else {
-                Err(format!("Can't find player with id: {}", player_id))
-            }
+        fn get_player_by_id(&mut self, player_id: i32) -> &mut Player {
+            self.players.get_mut(&player_id).unwrap()
         }
     }
 }
