@@ -85,7 +85,7 @@ pub mod gamelogic {
         }
         pub fn new(from: ControllerPoint, angle: f32, power: i32) -> CannonShot {
             let distance = MAX_CANNON_SHOT_LENGTH as f32 * (power as f32 / 100.0);
-            let step_size = (power / 10) as f32;
+            let step_size = 10.0;
             let radians = angle.to_radians();
             
             let dx = step_size * radians.cos();
@@ -116,6 +116,8 @@ pub mod gamelogic {
         power_loaded: i32,
         cannon_shot: Option<CannonShot>,
         input: PlayerInputFlags,
+        delta_x: f32,
+        delta_y: f32
     }
 
     impl Player {
@@ -125,36 +127,53 @@ pub mod gamelogic {
                 position: ControllerPoint::random_point(max_height, max_width),
                 cannon_angle: 0.0,
                 input: PlayerInputFlags::noinput,
+                delta_x: 0.0,
+                delta_y: 0.0,
                 is_loading_cannon: false,
                 cannon_shot: None,
                 power_loaded: 0,
             }
         }
-        pub fn has_input(&self) -> bool {
-            self.cannon_shot.is_some() || self.input.bits() > 0
+        pub fn should_tick(&self) -> bool {
+            self.cannon_shot.is_some() || self.input.bits() > 0 || self.delta_x != 0.0 || self.delta_y != 0.0
         }
-        pub fn tick(&mut self) {
-            let mut dx: f32 = 0.0;
-            let mut dy: f32 = 0.0;
-            let mut da: f32 = 0.0;
-
+        fn check_vertical(&mut self) {
             if self.input.contains(PlayerInputFlags::up) {
-                dy -= 2.0;
+                self.delta_y -= 1.0;
+            } else if !self.input.contains(PlayerInputFlags::down) && self.delta_y < 0.0 {
+                self.delta_y += 1.0
             }
             if self.input.contains(PlayerInputFlags::down) {
-                dy += 2.0;
+                self.delta_y += 1.0;
+            } else if !self.input.contains(PlayerInputFlags::up) && self.delta_y > 0.0 {
+                self.delta_y -= 1.0;
+            }
+        }
+
+        fn check_horizontal(&mut self) {
+            if self.input.contains(PlayerInputFlags::left) {
+                self.delta_x -= 1.0;
+            } else if !self.input.contains(PlayerInputFlags::right) && self.delta_x < 0.0 {
+                self.delta_x += 1.0
             }
             if self.input.contains(PlayerInputFlags::right) {
-                dx += 2.0;
+                self.delta_x += 1.0;
+            } else if !self.input.contains(PlayerInputFlags::up) && self.delta_x > 0.0 {
+                self.delta_x -= 1.0;
             }
-            if self.input.contains(PlayerInputFlags::left) {
-                dx -= 2.0;
-            }
+        }
+        pub fn tick(&mut self) {
+            let mut da: f32 = 0.0;
+
+            self.check_vertical();
+
+            self.check_horizontal();
+
             if self.input.contains(PlayerInputFlags::cannon_positive) {
-                da += 2.0;
+                da += 1.0;
             }
             if self.input.contains(PlayerInputFlags::cannon_negative) {
-                da -= 2.0;
+                da -= 1.0;
             }
             if self.input.contains(PlayerInputFlags::load_cannon) && !self.is_loading_cannon {
                 self.is_loading_cannon = true;
@@ -166,7 +185,7 @@ pub mod gamelogic {
                 self.power_loaded = 0;
             }
 
-            self.position.translate(dx, dy);
+            self.position.translate(self.delta_x, self.delta_y);
             let mut new_angle = (self.cannon_angle + da) % 359.0;
 
             if new_angle < 0.0 {
@@ -210,10 +229,9 @@ pub mod gamelogic {
             }
         }
         pub fn tick(&mut self) {
-            for player in self.players.iter_mut() {
-                if player.has_input() {
-                    player.tick();
-                }
+            for player in self.players.iter_mut().filter(|player| player.should_tick()) {
+                player.tick();
+                
                 if let Some(cannon_shot) = player.cannon_shot.take() {
                     self.id_count += 1;
                     self.cannon_shots.insert(self.id_count, cannon_shot);
@@ -221,7 +239,7 @@ pub mod gamelogic {
             }
         }
         pub fn should_tick(&self) -> bool {
-            self.cannon_shots.len() > 0 || self.players.iter().any(|player| player.has_input())
+            self.cannon_shots.len() > 0 || self.players.iter().any(|player| player.should_tick())
         }
         pub fn player_input(&mut self, input: InputRequest) {
             let player: &mut Player = self.get_player_by_id(input.player_id).expect("Player not found");
