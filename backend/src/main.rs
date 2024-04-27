@@ -28,10 +28,7 @@ async fn main() {
     println!("Server running at {}!", addr);
     tokio::spawn(game_controller_updater(game_controller.clone(), connection_pool.clone()));
     while let Ok((stream, _)) = listener.accept().await {
-
-        let game_controller = game_controller.clone();
-        let connection_pool = connection_pool.clone();
-        tokio::spawn(handle_connection(stream, game_controller, connection_pool));
+        tokio::spawn(handle_connection(stream, game_controller.clone(), connection_pool.clone()));
     }
 }
 
@@ -62,12 +59,12 @@ async fn game_controller_updater(game_controller: GameControllerArc, connection_
 }
 
 async fn handle_connection(stream: TcpStream, game_controller: GameControllerArc, connection_pool: ConnectionPool) {
-    if let Err(e) = handle_connection_inner(stream, game_controller, connection_pool).await {
+    if let Err(e) = player_connection(stream, game_controller, connection_pool).await {
         println!("Something happened: {:?}", e)
     }
 }
 
-async fn handle_connection_inner(stream: TcpStream, game_controller: GameControllerArc, connection_pool: ConnectionPool) -> Result<(), tokio_tungstenite::tungstenite::Error> {
+async fn player_connection(stream: TcpStream, game_controller: GameControllerArc, connection_pool: ConnectionPool) -> Result<(), tokio_tungstenite::tungstenite::Error> {
     let incoming_stream: WebSocketStream<TcpStream> = accept_async(stream).await.expect("Things went south during the handshake process");
     println!("Connection established!");
 
@@ -75,7 +72,7 @@ async fn handle_connection_inner(stream: TcpStream, game_controller: GameControl
 
     let connection_player_index;
 
-    { // add the new player to the game controller
+    { // add the new player to the game controller and to the connection pool, send info of new player to all clients
         let mut controller = game_controller.lock().await;
         connection_player_index = controller.add_player();
         

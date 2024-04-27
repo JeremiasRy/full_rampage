@@ -1,7 +1,7 @@
 include!(concat!(env!("OUT_DIR"), "/messages.rs"));
 
 pub mod gamelogic {
-    use std::{borrow::BorrowMut, collections::VecDeque};
+    use std::{collections::VecDeque};
     use std::collections::hash_map::HashMap;
     use bitflags::bitflags;
     use protobuf::RepeatedField;
@@ -116,7 +116,8 @@ pub mod gamelogic {
         cannon_shot: Option<CannonShot>,
         input: PlayerInputFlags,
         delta_x: f32,
-        delta_y: f32
+        delta_y: f32,
+        delta_a: f32,
     }
 
     impl Player {
@@ -127,6 +128,7 @@ pub mod gamelogic {
                 input: PlayerInputFlags::noinput,
                 delta_x: 0.0,
                 delta_y: 0.0,
+                delta_a: 0.0,
                 is_loading_cannon: false,
                 cannon_shot: None,
                 power_loaded: 0,
@@ -154,28 +156,45 @@ pub mod gamelogic {
         fn check_horizontal(&mut self) {
             if self.input.contains(PlayerInputFlags::left) {
                 self.delta_x -= 1.0;
+                if self.cannon_angle > 270.0 {
+                    self.delta_a -= 90.0;
+                }
+                if self.cannon_angle < 90.0 {
+                    self.delta_a += 90.0;
+                }
             } else if !self.input.contains(PlayerInputFlags::right) && self.delta_x < 0.0 {
                 self.delta_x += 1.0
             }
             if self.input.contains(PlayerInputFlags::right) {
                 self.delta_x += 1.0;
+                if self.cannon_angle > 180.0 && self.cannon_angle < 270.0 {
+                    self.delta_a += 90.0;
+                }
+                if self.cannon_angle > 90.0 && self.cannon_angle < 180.0 {
+                    self.delta_a -= 90.0;
+                }
             } else if !self.input.contains(PlayerInputFlags::up) && self.delta_x > 0.0 {
                 self.delta_x -= 1.0;
             }
         }
+
+        fn check_angle(&mut self) {
+            if self.input.contains(PlayerInputFlags::cannon_positive) {
+                self.delta_a += 1.0;
+            }
+            if self.input.contains(PlayerInputFlags::cannon_negative) {
+                self.delta_a -= 1.0;
+            }
+        }
         pub fn tick(&mut self) {
-            let mut da: f32 = 0.0;
+            println!("{}", self.cannon_angle);
 
             self.check_vertical();
 
             self.check_horizontal();
 
-            if self.input.contains(PlayerInputFlags::cannon_positive) {
-                da += 1.0;
-            }
-            if self.input.contains(PlayerInputFlags::cannon_negative) {
-                da -= 1.0;
-            }
+            self.check_angle();
+
             if self.input.contains(PlayerInputFlags::load_cannon) && !self.is_loading_cannon {
                 self.is_loading_cannon = true;
             }
@@ -187,7 +206,8 @@ pub mod gamelogic {
             }
 
             self.position.translate(self.delta_x, self.delta_y);
-            let mut new_angle = (self.cannon_angle + da) % 359.0;
+
+            let mut new_angle = (self.cannon_angle + self.delta_a) % 359.0;
 
             if new_angle < 0.0 {
                 new_angle += 360.0;
@@ -196,6 +216,7 @@ pub mod gamelogic {
                 self.power_loaded += 1;
             }
             self.cannon_angle = new_angle;
+            self.delta_a = 0.0;
         }
 
         fn calculate_cannon_position(&self) -> ControllerPoint {

@@ -2,6 +2,7 @@ use std::env;
 use std::fs::{read_to_string, File};
 use std::io::{BufWriter, Write};
 use std::path::Path;
+use std::process::Command;
 
 extern crate protoc_rust;
 
@@ -24,4 +25,4 @@ fn main() {
             writer.write_all(&[b'\n']).unwrap();
         }
     }
-}
+    let _ = Command::new("cargo").args(["fix", "--lib", "-p", "backend"]).spawn();

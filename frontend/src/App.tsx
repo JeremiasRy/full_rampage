@@ -27,7 +27,7 @@ function App() {
       return;
     }
 
-    const parsedInput = validInputs[event.code]();
+    const parsedInput = validInputs[event.code];
     setKeysDown((keys) => new Set([...keys, parsedInput]));
   }
 
@@ -37,7 +37,7 @@ function App() {
       return;
     }
 
-    const parsedInput = validInputs[event.code]();
+    const parsedInput = validInputs[event.code];
     setKeysDown((prevKeys) => {
       const updatedSet = new Set(prevKeys);
       if (parsedInput == 1 << 6 && prevKeys.has(1 << 6)) {
