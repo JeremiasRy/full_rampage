@@ -84,7 +84,7 @@ function App() {
 
     const protoLoad = async () => {
       try {
-        const root = await proto.load("messages.proto");
+        const root = await proto.load("messages-frontend.proto");
         protoRoot = root;
         protoEnum = root.lookupEnum("MessageType");
         protoRootRef.current = protoRoot;

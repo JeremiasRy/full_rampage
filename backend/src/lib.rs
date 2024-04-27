@@ -15,13 +15,6 @@ pub mod gamelogic {
 
     type InputRequest = crate::InputRequest;
 
-    enum Direction {
-        Left,
-        Right,
-        Up,
-        Down
-    }
-
     bitflags! {
         #[derive(Debug)]
         struct PlayerInputFlags: u8 {
@@ -82,6 +75,10 @@ pub mod gamelogic {
 
             if over_half {
                 result = 100 - (result - 100);
+            }
+
+            if result < 20 {
+                return 20
             }
 
             result
@@ -148,7 +145,7 @@ pub mod gamelogic {
     impl Player {
         pub fn new(max_height: i32, max_width: i32) -> Player {
             Player {
-                position: ControllerPoint::random_point(max_height, max_width),
+                position: ControllerPoint::random_point(max_height - PLAYER_SIZE as i32, max_width - PLAYER_SIZE as i32),
                 cannon_angle: 0.0,
                 input: PlayerInputFlags::noinput,
                 delta_x: 0.0,

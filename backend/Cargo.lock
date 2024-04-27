@@ -110,8 +110,6 @@ dependencies = [
  "protobuf-codegen-pure",
  "protoc-rust",
  "rand",
- "serde",
- "serde_json",
  "tokio",
  "tokio-tungstenite",
 ]

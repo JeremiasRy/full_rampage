@@ -35,4 +35,5 @@ message ServerOutput {
     MessageType type = 1;
     repeated PlayerResponse players = 2;
     repeated CannonShotResponse shots = 3;
+    repeated CannonShotResponse explosions = 4;
 }
