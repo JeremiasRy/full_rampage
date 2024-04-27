@@ -1,7 +1,7 @@
 include!(concat!(env!("OUT_DIR"), "/messages.rs"));
 
 pub mod gamelogic {
-    use std::{collections::VecDeque};
+    use std::collections::VecDeque;
     use std::collections::hash_map::HashMap;
     use bitflags::bitflags;
     use protobuf::RepeatedField;
@@ -10,8 +10,17 @@ pub mod gamelogic {
     const PLAYER_SIZE: f32 = 25.0;
     const CANNON_LENGTH: f32 = 25.0;
     const MAX_CANNON_SHOT_LENGTH: i32 = 300;
+    const BOUNDS_HEIGHT: i32 = 800;
+    const BOUNDS_WIDTH: i32 = 1200;
 
     type InputRequest = crate::InputRequest;
+
+    enum Direction {
+        Left,
+        Right,
+        Up,
+        Down
+    }
 
     bitflags! {
         #[derive(Debug)]
@@ -140,15 +149,16 @@ pub mod gamelogic {
         pub fn input(&mut self, input:PlayerInputFlags) {
             self.input = input
         }
+
         fn check_vertical(&mut self) {
             if self.input.contains(PlayerInputFlags::up) {
                 self.delta_y -= 1.0;
-            } else if !self.input.contains(PlayerInputFlags::down) && self.delta_y < 0.0 {
+            } else if self.delta_y < 0.0 { // brakes
                 self.delta_y += 1.0
             }
             if self.input.contains(PlayerInputFlags::down) {
                 self.delta_y += 1.0;
-            } else if !self.input.contains(PlayerInputFlags::up) && self.delta_y > 0.0 {
+            } else if self.delta_y > 0.0 { // brakes
                 self.delta_y -= 1.0;
             }
         }
@@ -156,45 +166,32 @@ pub mod gamelogic {
         fn check_horizontal(&mut self) {
             if self.input.contains(PlayerInputFlags::left) {
                 self.delta_x -= 1.0;
-                if self.cannon_angle > 270.0 {
-                    self.delta_a -= 90.0;
-                }
-                if self.cannon_angle < 90.0 {
-                    self.delta_a += 90.0;
-                }
-            } else if !self.input.contains(PlayerInputFlags::right) && self.delta_x < 0.0 {
+            } else if self.delta_x < 0.0 { //brakes
                 self.delta_x += 1.0
             }
             if self.input.contains(PlayerInputFlags::right) {
                 self.delta_x += 1.0;
-                if self.cannon_angle > 180.0 && self.cannon_angle < 270.0 {
-                    self.delta_a += 90.0;
-                }
-                if self.cannon_angle > 90.0 && self.cannon_angle < 180.0 {
-                    self.delta_a -= 90.0;
-                }
-            } else if !self.input.contains(PlayerInputFlags::up) && self.delta_x > 0.0 {
+            } else if self.delta_x > 0.0 { //brakes
                 self.delta_x -= 1.0;
             }
         }
 
         fn check_angle(&mut self) {
+
             if self.input.contains(PlayerInputFlags::cannon_positive) {
                 self.delta_a += 1.0;
+            } else if self.delta_a > 0.0 {
+                self.delta_a = 0.0;
             }
+
             if self.input.contains(PlayerInputFlags::cannon_negative) {
                 self.delta_a -= 1.0;
+            } else if self.delta_a < 0.0 {
+                self.delta_a = 0.0;
             }
         }
-        pub fn tick(&mut self) {
-            println!("{}", self.cannon_angle);
 
-            self.check_vertical();
-
-            self.check_horizontal();
-
-            self.check_angle();
-
+        fn check_shooting(&mut self) {
             if self.input.contains(PlayerInputFlags::load_cannon) && !self.is_loading_cannon {
                 self.is_loading_cannon = true;
             }
@@ -204,9 +201,44 @@ pub mod gamelogic {
                 self.is_loading_cannon = false;
                 self.power_loaded = 0;
             }
+        }
 
-            self.position.translate(self.delta_x, self.delta_y);
+        fn check_collision(&mut self) {
+            let horizontal_check = (self.position.x + self.delta_x) as i32;
+            let vertical_check = (self.position.y + self.delta_y) as i32;
 
+            if vertical_check < 0 || vertical_check + (PLAYER_SIZE as i32) > BOUNDS_HEIGHT {
+                if self.delta_y < 0.0 {
+                    self.delta_y = 0.0 + self.delta_y.abs()
+                } else if self.delta_y > 0.0 {
+                    self.delta_y = 0.0 - self.delta_y
+                }
+            }
+
+            if horizontal_check < 0 || horizontal_check + (PLAYER_SIZE as i32) > BOUNDS_WIDTH {
+
+                if self.delta_x < 0.0 {
+                    self.delta_x = 0.0 + self.delta_x.abs();
+                } else if self.delta_x > 0.0 {
+                    self.delta_x = 0.0 - self.delta_x;
+                }
+            }
+        }
+
+        pub fn tick(&mut self) {
+            self.check_vertical();
+
+            self.check_horizontal();
+
+            self.check_angle();
+
+            self.check_shooting();
+
+            if self.delta_x != 0.0 || self.delta_y != 0.0 {
+                self.check_collision();
+                self.position.translate(self.delta_x, self.delta_y);
+            }
+            
             let mut new_angle = (self.cannon_angle + self.delta_a) % 359.0;
 
             if new_angle < 0.0 {
@@ -216,7 +248,6 @@ pub mod gamelogic {
                 self.power_loaded += 1;
             }
             self.cannon_angle = new_angle;
-            self.delta_a = 0.0;
         }
 
         fn calculate_cannon_position(&self) -> ControllerPoint {
@@ -244,8 +275,8 @@ pub mod gamelogic {
         pub fn new() -> GameController {
             GameController {
                 id_count: 0,
-                height: 800,
-                width: 1200,
+                height: BOUNDS_HEIGHT,
+                width: BOUNDS_WIDTH,
                 players: HashMap::<i32, Player>::new(),
                 cannon_shots: HashMap::<i32, CannonShot>::new()
             }
