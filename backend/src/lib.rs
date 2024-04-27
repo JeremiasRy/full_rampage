@@ -94,11 +94,11 @@ pub mod gamelogic {
         }
         pub fn new(from: ControllerPoint, angle: f32, power: i32) -> CannonShot {
             let distance = MAX_CANNON_SHOT_LENGTH as f32 * (power as f32 / 100.0);
-            let step_size = 10.0;
+            let step_size = 20.0;
             let radians = angle.to_radians();
             
-            let dx = step_size * radians.cos();
-            let dy = step_size * radians.sin();
+            let mut dx = step_size * radians.cos();
+            let mut dy = step_size * radians.sin();
 
             let mut trajectory = VecDeque::<ControllerPoint>::new();
             
@@ -108,6 +108,22 @@ pub mod gamelogic {
                 trajectory.push_back(ControllerPoint { x: current_x, y: current_y });
                 current_x += dx;
                 current_y += dy;
+
+                if current_x < 0.0 || current_x > BOUNDS_WIDTH as f32 {
+                    if dx < 0.0 {
+                        dx = 0.0 + dx.abs();
+                    } else if dx > 0.0 {
+                        dx = 0.0 - dx;
+                    }
+                }
+
+                if current_y < 0.0 || current_y > BOUNDS_HEIGHT as f32 {
+                    if dy < 0.0 {
+                        dy = 0.0 + dy.abs();
+                    } else if dy > 0.0 {
+                        dy = 0.0 - dy;
+                    }
+                }
             }
             CannonShot {
                 distance_to_travel: trajectory.len() as f32,
@@ -150,13 +166,18 @@ pub mod gamelogic {
             self.input = input
         }
 
+        fn is_at_top_speed(delta: f32) -> bool {
+            delta.abs() >= 10.0
+        }
+
         fn check_vertical(&mut self) {
-            if self.input.contains(PlayerInputFlags::up) {
+            let is_at_top_speed = Player::is_at_top_speed(self.delta_y);
+            if self.input.contains(PlayerInputFlags::up) && !is_at_top_speed {
                 self.delta_y -= 1.0;
             } else if self.delta_y < 0.0 { // brakes
                 self.delta_y += 1.0
             }
-            if self.input.contains(PlayerInputFlags::down) {
+            if self.input.contains(PlayerInputFlags::down) && !is_at_top_speed {
                 self.delta_y += 1.0;
             } else if self.delta_y > 0.0 { // brakes
                 self.delta_y -= 1.0;
@@ -164,12 +185,13 @@ pub mod gamelogic {
         }
 
         fn check_horizontal(&mut self) {
-            if self.input.contains(PlayerInputFlags::left) {
-                self.delta_x -= 1.0;
+            let is_at_top_speed = Player::is_at_top_speed(self.delta_x);
+            if self.input.contains(PlayerInputFlags::left) && !is_at_top_speed {
+                self.delta_x -= 1.0
             } else if self.delta_x < 0.0 { //brakes
-                self.delta_x += 1.0
+                self.delta_x += 1.0;
             }
-            if self.input.contains(PlayerInputFlags::right) {
+            if self.input.contains(PlayerInputFlags::right) && !is_at_top_speed {
                 self.delta_x += 1.0;
             } else if self.delta_x > 0.0 { //brakes
                 self.delta_x -= 1.0;
@@ -177,14 +199,14 @@ pub mod gamelogic {
         }
 
         fn check_angle(&mut self) {
-
-            if self.input.contains(PlayerInputFlags::cannon_positive) {
+            let is_at_top_speed = Player::is_at_top_speed(self.delta_a);
+            if self.input.contains(PlayerInputFlags::cannon_positive) && !is_at_top_speed {
                 self.delta_a += 1.0;
             } else if self.delta_a > 0.0 {
                 self.delta_a = 0.0;
             }
 
-            if self.input.contains(PlayerInputFlags::cannon_negative) {
+            if self.input.contains(PlayerInputFlags::cannon_negative) && !is_at_top_speed {
                 self.delta_a -= 1.0;
             } else if self.delta_a < 0.0 {
                 self.delta_a = 0.0;
@@ -236,6 +258,7 @@ pub mod gamelogic {
 
             if self.delta_x != 0.0 || self.delta_y != 0.0 {
                 self.check_collision();
+
                 self.position.translate(self.delta_x, self.delta_y);
             }
             
