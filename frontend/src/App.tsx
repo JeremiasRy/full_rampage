@@ -28,7 +28,13 @@ function App() {
     }
 
     const parsedInput = validInputs[event.code];
-    setKeysDown((keys) => new Set([...keys, parsedInput]));
+    setKeysDown((prevKeys) => {
+      const updatedSet = new Set([...prevKeys, parsedInput]);
+      if (parsedInput == validInputs.Space && prevKeys.has(validInputs.Fire)) {
+        updatedSet.delete(validInputs.Fire);
+      }
+      return updatedSet;
+    });
   }
 
   function handleKeyUp(event: KeyboardEvent) {
@@ -40,9 +46,11 @@ function App() {
     const parsedInput = validInputs[event.code];
     setKeysDown((prevKeys) => {
       const updatedSet = new Set(prevKeys);
-      if (parsedInput == 1 << 6 && prevKeys.has(1 << 6)) {
-        updatedSet.add(1 << 7);
+
+      if (parsedInput == validInputs.Space && prevKeys.has(validInputs.Space)) {
+        updatedSet.add(validInputs.Fire);
       }
+
       updatedSet.delete(parsedInput);
       return updatedSet;
     });
@@ -64,6 +72,7 @@ function App() {
     ) {
       return;
     }
+    console.log(keysArray);
     const payload = {
       playerId: id,
       input: keysArray.reduce((a, b) => a + b, 0),

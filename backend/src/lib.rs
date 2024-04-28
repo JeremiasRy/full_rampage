@@ -3,7 +3,6 @@ include!(concat!(env!("OUT_DIR"), "/messages.rs"));
 pub mod gamelogic {
     use std::collections::VecDeque;
     use std::collections::hash_map::HashMap;
-    use bitflags::bitflags;
     use protobuf::RepeatedField;
     use rand::{thread_rng, Rng};
     use crate::{CannonShotResponse, PlayerResponse, Point, ServerOutput};
@@ -15,18 +14,25 @@ pub mod gamelogic {
 
     type InputRequest = crate::InputRequest;
 
-    bitflags! {
-        #[derive(Debug)]
-        struct PlayerInputFlags: u8 {
-            const noinput = 0;
-            const up = 0b000001;
-            const right = 0b000010;
-            const down = 0b000100;
-            const left = 0b001000;
-            const cannon_positive = 0b010000;
-            const cannon_negative = 0b100000;
-            const load_cannon = 0b1000000;
-            const fire = 0b10000000;
+    enum PlayerInput {
+        NoInput,
+        Up = 1,
+        Right = 1 << 1,
+        Down = 1 << 2,
+        Left = 1 << 3,
+        AimPositive = 1 << 4,
+        AimNegative = 1 << 5,
+        LoadCannon = 1 << 6,
+        Fire = 1 << 7
+    }
+    trait BitFlag {
+        fn contains(&self, player_input:PlayerInput) -> bool;
+    }
+    impl BitFlag for i32 {
+        fn contains(&self, player_input:PlayerInput) -> bool {
+            let integer_representation = player_input as i32;
+
+            self & integer_representation == integer_representation
         }
     }
     #[derive(Debug, Clone, Copy, PartialEq)]
@@ -57,6 +63,7 @@ pub mod gamelogic {
 
     #[derive(Debug)]
     struct CannonShot {
+        from_player_id: i32,
         distance_to_travel: f32,
         trajectory: VecDeque<ControllerPoint>,
     }
@@ -89,7 +96,7 @@ pub mod gamelogic {
                 position: self.trajectory.pop_front(),
             }
         }
-        pub fn new(from: ControllerPoint, angle: f32, power: i32) -> CannonShot {
+        pub fn new(from_player_id: i32, from: ControllerPoint, angle: f32, power: i32) -> Self {
             let distance = MAX_CANNON_SHOT_LENGTH as f32 * (power as f32 / 100.0);
             let step_size = 20.0;
             let radians = angle.to_radians();
@@ -123,6 +130,7 @@ pub mod gamelogic {
                 }
             }
             CannonShot {
+                from_player_id,
                 distance_to_travel: trajectory.len() as f32,
                 trajectory
             }
@@ -131,23 +139,25 @@ pub mod gamelogic {
 
     #[derive(Debug)]
     struct Player {
+        id: i32,
         position: ControllerPoint,
         cannon_angle: f32,
         is_loading_cannon: bool,
         power_loaded: i32,
         cannon_shot: Option<CannonShot>,
-        input: PlayerInputFlags,
+        input: i32,
         delta_x: f32,
         delta_y: f32,
         delta_a: f32,
     }
 
     impl Player {
-        pub fn new(max_height: i32, max_width: i32) -> Player {
+        pub fn new(id: i32, max_height: i32, max_width: i32) -> Self {
             Player {
+                id,
                 position: ControllerPoint::random_point(max_height - PLAYER_SIZE as i32, max_width - PLAYER_SIZE as i32),
                 cannon_angle: 0.0,
-                input: PlayerInputFlags::noinput,
+                input: PlayerInput::NoInput as i32,
                 delta_x: 0.0,
                 delta_y: 0.0,
                 delta_a: 0.0,
@@ -156,11 +166,43 @@ pub mod gamelogic {
                 power_loaded: 0,
             }
         }
-        pub fn should_tick(&self) -> bool {
-            self.cannon_shot.is_some() || self.input.bits() > 0 || self.delta_x != 0.0 || self.delta_y != 0.0
+        pub fn tick(&mut self) {
+            self.check_vertical();
+
+            self.check_horizontal();
+
+            self.check_angle();
+
+            self.check_shooting();
+
+            if self.is_moving() {
+                self.check_collision();
+            }
+
+            self.translate();
         }
-        pub fn input(&mut self, input:PlayerInputFlags) {
+        pub fn should_tick(&self) -> bool {
+            self.cannon_shot.is_some() || self.input > 0 || self.delta_x != 0.0 || self.delta_y != 0.0
+        }
+        pub fn input(&mut self, input:i32) {
             self.input = input
+        }
+
+        fn translate(&mut self) {
+            let mut new_angle = (self.cannon_angle + self.delta_a) % 359.0;
+
+            if new_angle < 0.0 {
+                new_angle += 360.0;
+            }
+            if self.is_loading_cannon && self.power_loaded < 100 {
+                self.power_loaded += 1;
+            }
+            self.cannon_angle = new_angle;
+            self.position.translate(self.delta_x, self.delta_y);
+        }
+
+        fn is_moving(&self) -> bool {
+            self.delta_x != 0.0 || self.delta_y != 0.0
         }
 
         fn is_at_top_speed(delta: f32) -> bool {
@@ -169,12 +211,12 @@ pub mod gamelogic {
 
         fn check_vertical(&mut self) {
             let is_at_top_speed = Player::is_at_top_speed(self.delta_y);
-            if self.input.contains(PlayerInputFlags::up) && !is_at_top_speed {
+            if self.input.contains(PlayerInput::Up) && !is_at_top_speed {
                 self.delta_y -= 1.0;
             } else if self.delta_y < 0.0 { // brakes
                 self.delta_y += 1.0
             }
-            if self.input.contains(PlayerInputFlags::down) && !is_at_top_speed {
+            if self.input.contains(PlayerInput::Down) && !is_at_top_speed {
                 self.delta_y += 1.0;
             } else if self.delta_y > 0.0 { // brakes
                 self.delta_y -= 1.0;
@@ -183,12 +225,12 @@ pub mod gamelogic {
 
         fn check_horizontal(&mut self) {
             let is_at_top_speed = Player::is_at_top_speed(self.delta_x);
-            if self.input.contains(PlayerInputFlags::left) && !is_at_top_speed {
+            if self.input.contains(PlayerInput::Left) && !is_at_top_speed {
                 self.delta_x -= 1.0
             } else if self.delta_x < 0.0 { //brakes
                 self.delta_x += 1.0;
             }
-            if self.input.contains(PlayerInputFlags::right) && !is_at_top_speed {
+            if self.input.contains(PlayerInput::Right) && !is_at_top_speed {
                 self.delta_x += 1.0;
             } else if self.delta_x > 0.0 { //brakes
                 self.delta_x -= 1.0;
@@ -197,13 +239,13 @@ pub mod gamelogic {
 
         fn check_angle(&mut self) {
             let is_at_top_speed = Player::is_at_top_speed(self.delta_a);
-            if self.input.contains(PlayerInputFlags::cannon_positive) && !is_at_top_speed {
+            if self.input.contains(PlayerInput::AimPositive) && !is_at_top_speed {
                 self.delta_a += 1.0;
             } else if self.delta_a > 0.0 {
                 self.delta_a = 0.0;
             }
 
-            if self.input.contains(PlayerInputFlags::cannon_negative) && !is_at_top_speed {
+            if self.input.contains(PlayerInput::AimNegative) && !is_at_top_speed {
                 self.delta_a -= 1.0;
             } else if self.delta_a < 0.0 {
                 self.delta_a = 0.0;
@@ -211,12 +253,12 @@ pub mod gamelogic {
         }
 
         fn check_shooting(&mut self) {
-            if self.input.contains(PlayerInputFlags::load_cannon) && !self.is_loading_cannon {
+            if self.input.contains(PlayerInput::LoadCannon) && !self.is_loading_cannon {
                 self.is_loading_cannon = true;
+                return;
             }
-            
-            if !self.input.contains(PlayerInputFlags::load_cannon) && self.is_loading_cannon {
-                self.cannon_shot = Some(CannonShot::new(self.calculate_cannon_position(), self.cannon_angle, self.power_loaded));
+            if self.input.contains(PlayerInput::Fire) && self.is_loading_cannon {
+                self.cannon_shot = Some(CannonShot::new( self.id, self.get_cannon_position(), self.cannon_angle, self.power_loaded));
                 self.is_loading_cannon = false;
                 self.power_loaded = 0;
             }
@@ -244,33 +286,7 @@ pub mod gamelogic {
             }
         }
 
-        pub fn tick(&mut self) {
-            self.check_vertical();
-
-            self.check_horizontal();
-
-            self.check_angle();
-
-            self.check_shooting();
-
-            if self.delta_x != 0.0 || self.delta_y != 0.0 {
-                self.check_collision();
-
-                self.position.translate(self.delta_x, self.delta_y);
-            }
-            
-            let mut new_angle = (self.cannon_angle + self.delta_a) % 359.0;
-
-            if new_angle < 0.0 {
-                new_angle += 360.0;
-            }
-            if self.is_loading_cannon && self.power_loaded < 100 {
-                self.power_loaded += 1;
-            }
-            self.cannon_angle = new_angle;
-        }
-
-        fn calculate_cannon_position(&self) -> ControllerPoint {
+        fn get_cannon_position(&self) -> ControllerPoint {
             let cannon_radians = (self.cannon_angle as f32).to_radians();
             let (center_x, center_y) = (self.position.x + PLAYER_SIZE / 2.0, self.position.y + PLAYER_SIZE / 2.0);
             let dx = CANNON_LENGTH as f32 * cannon_radians.cos();
@@ -280,7 +296,6 @@ pub mod gamelogic {
                 y: dy + center_y
             }
         }
-
     }
 
     pub struct GameController {
@@ -315,20 +330,20 @@ pub mod gamelogic {
             self.cannon_shots.len() > 0 || self.players.iter().any(|(_, player)| player.should_tick())
         }
         pub fn player_input(&mut self, input: InputRequest) {
-            let player: &mut Player = self.get_player_by_id(input.player_id);
-            let input_flags: PlayerInputFlags = PlayerInputFlags::from_bits(input.input.try_into().unwrap()).expect("Invalid input");
-            player.input(input_flags);
+            if let Some(player) = self.players.get_mut(&input.get_player_id()) {
+                player.input(input.get_input());
+            };
         }
         pub fn output(&mut self) -> ServerOutput {
             let player_response_vec: Vec<PlayerResponse> = self.players.values_mut().map(|player| {
                 let mut response_object = PlayerResponse::new();
                 response_object.set_position(player.position.to_buffer_point());
-                response_object.set_cannon_position(player.calculate_cannon_position().to_buffer_point());
+                response_object.set_cannon_position(player.get_cannon_position().to_buffer_point());
                 response_object
             }).collect();
 
             let mut cannon_shot_response_vec = Vec::<CannonShotResponse>::new();
-            let mut marked_for_remove = Vec::<i32>::new();
+            let mut cannon_shot_ids_marked_for_remove = Vec::<i32>::new();
 
             for (id, cannon_shot) in self.cannon_shots.iter_mut() {
                 let cannon_shot_state = cannon_shot.get_pos();
@@ -341,11 +356,11 @@ pub mod gamelogic {
                     cannon_shot_response_vec.push(cannon_shot_response);
                 } else {
                     println!("Explosions!!");
-                    marked_for_remove.push(*id);
+                    cannon_shot_ids_marked_for_remove.push(*id);
                 }
             }
 
-            for id in marked_for_remove {
+            for id in cannon_shot_ids_marked_for_remove {
                 self.cannon_shots.remove_entry(&id);
             }
 
@@ -360,14 +375,11 @@ pub mod gamelogic {
         }
         pub fn add_player(&mut self) -> i32 {
             self.id_count += 1;
-            self.players.insert(self.id_count,Player::new(self.height, self.width));
+            self.players.insert(self.id_count,Player::new(self.id_count, self.height, self.width));
             self.id_count
         }
         pub fn drop_player(&mut self, player_id: i32) {
             self.players.remove_entry(&player_id);
-        }
-        fn get_player_by_id(&mut self, player_id: i32) -> &mut Player {
-            self.players.get_mut(&player_id).unwrap()
         }
     }
 }

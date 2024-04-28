@@ -102,7 +102,6 @@ checksum = "f1fdabc7756949593fe60f30ec81974b613357de856987752631dea1e3394c80"
 name = "backend"
 version = "0.1.0"
 dependencies = [
- "bitflags 2.5.0",
  "bytes",
  "futures-util",
  "mini-redis",
