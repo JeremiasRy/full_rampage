@@ -1,11 +1,12 @@
 include!(concat!(env!("OUT_DIR"), "/messages.rs"));
 
 pub mod gamelogic {
+    use crate::{CannonEventResponse, PlayerResponse, Point, ServerOutput};
     use std::collections::VecDeque;
     use std::collections::hash_map::HashMap;
     use protobuf::RepeatedField;
     use rand::{thread_rng, Rng};
-    use crate::{CannonShotResponse, PlayerResponse, Point, ServerOutput};
+
     const PLAYER_SIZE: f32 = 25.0;
     const CANNON_LENGTH: f32 = 25.0;
     const MAX_CANNON_SHOT_LENGTH: i32 = 300;
@@ -60,12 +61,42 @@ pub mod gamelogic {
             point
         }
     }
+    struct Explosion {
+        position: ControllerPoint,
+        from_player_id: i32,
+        size: i32,
+        reached_max_size: bool
+    }
+
+    impl Explosion {
+        pub fn new(from_player_id: i32, position: ControllerPoint) -> Self {
+            Explosion {
+                from_player_id,
+                position,
+                size: 1,
+                reached_max_size: false
+            }
+        }
+        pub fn tick(&mut self) {
+
+            if !self.reached_max_size && self.size >= 100 {
+                self.reached_max_size = true;
+            }
+
+            if self.reached_max_size {
+                self.size -= 20;
+                return;
+            }
+            self.size += 10;
+        }
+    }
 
     #[derive(Debug)]
     struct CannonShot {
         from_player_id: i32,
         distance_to_travel: f32,
         trajectory: VecDeque<ControllerPoint>,
+        last_position: Option<ControllerPoint>
     }
 
     struct CannonShotPosition {
@@ -91,9 +122,18 @@ pub mod gamelogic {
             result
         }
         pub fn get_pos(&mut self) -> CannonShotPosition {
+            let position = self.trajectory.pop_front();
+
+            match position {
+                Some(pos) => {
+                    self.last_position = Some(pos.clone());
+                },
+                _ => ()
+            }
+
             CannonShotPosition {
-                size: self.count_size(),
-                position: self.trajectory.pop_front(),
+                position,
+                size: self.count_size()
             }
         }
         pub fn new(from_player_id: i32, from: ControllerPoint, angle: f32, power: i32) -> Self {
@@ -130,6 +170,7 @@ pub mod gamelogic {
                 }
             }
             CannonShot {
+                last_position: None,
                 from_player_id,
                 distance_to_travel: trajectory.len() as f32,
                 trajectory
@@ -303,6 +344,7 @@ pub mod gamelogic {
         width: i32,
         players: HashMap<i32, Player>,
         cannon_shots: HashMap<i32, CannonShot>,
+        explosions: HashMap<i32, Explosion>,
         id_count: i32
     }
 
@@ -313,7 +355,8 @@ pub mod gamelogic {
                 height: BOUNDS_HEIGHT,
                 width: BOUNDS_WIDTH,
                 players: HashMap::<i32, Player>::new(),
-                cannon_shots: HashMap::<i32, CannonShot>::new()
+                cannon_shots: HashMap::<i32, CannonShot>::new(),
+                explosions: HashMap::<i32, Explosion>::new()
             }
         }
         pub fn tick(&mut self) {
@@ -324,6 +367,9 @@ pub mod gamelogic {
                     self.id_count += 1;
                     self.cannon_shots.insert(self.id_count, cannon_shot);
                 }
+            }
+            if !self.explosions.is_empty() {
+                self.explosions.iter_mut().for_each(| (_, explosion) | explosion.tick())
             }
         }
         pub fn should_tick(&self) -> bool {
@@ -342,20 +388,40 @@ pub mod gamelogic {
                 response_object
             }).collect();
 
-            let mut cannon_shot_response_vec = Vec::<CannonShotResponse>::new();
+            let mut cannon_shot_response_vec = Vec::<CannonEventResponse>::new();
+            let mut exlosion_response_vec = Vec::<CannonEventResponse>::new();
+            
             let mut cannon_shot_ids_marked_for_remove = Vec::<i32>::new();
+            let mut explosions_marked_for_remove = Vec::<i32>::new();
+
+            for (id, explosion) in self.explosions.iter_mut() {
+                if explosion.size <= 0 {
+                    explosions_marked_for_remove.push(*id);
+                    continue;
+                }
+                let mut explosion_response = CannonEventResponse::new();
+
+                explosion_response.set_position(explosion.position.to_buffer_point());
+                explosion_response.set_size(explosion.size);
+                exlosion_response_vec.push(explosion_response);
+            }
 
             for (id, cannon_shot) in self.cannon_shots.iter_mut() {
                 let cannon_shot_state = cannon_shot.get_pos();
 
                 if let Some(position) = cannon_shot_state.position {
-                    let mut cannon_shot_response = CannonShotResponse::new();
+                    let mut cannon_shot_response = CannonEventResponse::new();
                     cannon_shot_response.set_position(position.to_buffer_point());
                     cannon_shot_response.set_size(cannon_shot_state.size);
 
                     cannon_shot_response_vec.push(cannon_shot_response);
                 } else {
-                    println!("Explosions!!");
+                    self.id_count += 1;
+                    if let Some(last_position) = cannon_shot.last_position {
+                        self.explosions.insert(self.id_count, Explosion::new(cannon_shot.from_player_id, last_position));
+                    } else {
+                        println!("No last position found for cannon shot?")
+                    }
                     cannon_shot_ids_marked_for_remove.push(*id);
                 }
             }
@@ -363,12 +429,18 @@ pub mod gamelogic {
             for id in cannon_shot_ids_marked_for_remove {
                 self.cannon_shots.remove_entry(&id);
             }
+            for id in explosions_marked_for_remove {
+                self.explosions.remove_entry(&id);
+            }
+
 
             let mut server_output = ServerOutput::new();
             let players = RepeatedField::from_vec(player_response_vec);
             let cannon_shots = RepeatedField::from_vec(cannon_shot_response_vec);
+            let explosions = RepeatedField::from_vec(exlosion_response_vec);
             server_output.set_players(players);
             server_output.set_shots(cannon_shots);
+            server_output.set_explosions(explosions);
             server_output.set_field_type(crate::MessageType::frame);
 
             server_output

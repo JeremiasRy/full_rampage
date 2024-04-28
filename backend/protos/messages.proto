@@ -26,7 +26,7 @@ message PlayerResponse {
     Point cannon_position = 2;
 }
 
-message CannonShotResponse {
+message CannonEventResponse {
     Point position = 1;
     int32 size = 2;
 }
@@ -34,6 +34,6 @@ message CannonShotResponse {
 message ServerOutput {
     MessageType type = 1;
     repeated PlayerResponse players = 2;
-    repeated CannonShotResponse shots = 3;
-    repeated CannonShotResponse explosions = 4;
+    repeated CannonEventResponse shots = 3;
+    repeated CannonEventResponse explosions = 4;
 }

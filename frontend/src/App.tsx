@@ -7,7 +7,7 @@ import proto from "protobufjs";
 import {
   PlayerResponse,
   ServerOutput,
-  CannonShotResponse,
+  CannonEventResponse,
 } from "./types/responses";
 
 function App() {
@@ -17,6 +17,7 @@ function App() {
   const [serverOutput, setServerOutput] = useState<ServerOutput>({
     players: [],
     shots: [],
+    explosions: [],
   });
   const connection = useRef<WebSocket | null>(null);
   const protoRootRef = useRef<proto.Root>();
@@ -132,18 +133,20 @@ function App() {
             return;
           }
           if (messageFlag === 1) {
-            const { players, shots } = {
+            const { players, shots, explosions } = {
               ...(protoRoot
                 .lookupType("ServerOutput")
                 .decode(uintArr) as unknown as {
                 type: number;
                 players: PlayerResponse[];
-                shots: CannonShotResponse[];
+                shots: CannonEventResponse[];
+                explosions: CannonEventResponse[];
               }),
             };
             setServerOutput({
               players,
               shots,
+              explosions,
             });
           }
         }

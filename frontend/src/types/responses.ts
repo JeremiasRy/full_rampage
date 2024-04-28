@@ -1,6 +1,7 @@
 export type ServerOutput = {
   players: PlayerResponse[];
-  shots: CannonShotResponse[];
+  shots: CannonEventResponse[];
+  explosions: CannonEventResponse[];
 };
 
 export type PlayerId = {
@@ -12,7 +13,7 @@ export type PlayerResponse = {
   position: Position;
   cannonPosition: Position;
 };
-export type CannonShotResponse = {
+export type CannonEventResponse = {
   position: Position;
   size: number;
 };
