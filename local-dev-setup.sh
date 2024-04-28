@@ -25,22 +25,19 @@ fi
 
 if [[ "$response" =~ ^([yY][eE][sS]|[yY])$ ]]; then
     sudo apt-get update && sudo apt install -y protobuf-compiler
-
-    proto_bufs="./backend/protos/messages.proto"
-    destination_dir="./frontend"
-
-    cp "$proto_bufs" "$destination_dir"
-    cd frontend
-
-    mv messages.proto messages-frontend.proto
-    npm i
-    cd ../backend
-    cargo build
-    cd ..
-else
-    echo "Exiting..."
-    exit 0
 fi
+
+proto_bufs="./backend/protos/messages.proto"
+destination_dir="./frontend"
+
+cp "$proto_bufs" "$destination_dir"
+cd frontend
+
+mv messages.proto messages-frontend.proto
+npm i
+cd ../backend
+cargo build
+cd ..
 
 echo "Installed dependinces!"
 echo "cd to ./frontend and run 'npm run dev' to run frontend server"
