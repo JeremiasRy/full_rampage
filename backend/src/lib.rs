@@ -138,7 +138,7 @@ pub mod gamelogic {
         }
         pub fn new(from_player_id: i32, from: ControllerPoint, angle: f32, power: i32) -> Self {
             let distance = MAX_CANNON_SHOT_LENGTH as f32 * (power as f32 / 100.0);
-            let step_size = 20.0;
+            let step_size = 30.0;
             let radians = angle.to_radians();
             
             let mut dx = step_size * radians.cos();
@@ -247,7 +247,7 @@ pub mod gamelogic {
         }
 
         fn is_at_top_speed(delta: f32) -> bool {
-            delta.abs() >= 10.0
+            delta.abs() >= 15.0
         }
 
         fn check_vertical(&mut self) {
