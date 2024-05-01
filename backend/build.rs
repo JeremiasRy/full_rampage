@@ -25,5 +25,4 @@ fn main() {
             writer.write_all(&[b'\n']).unwrap();
         }
     }
-    let _ = Command::new("cargo").args(["fix", "--lib", "-p", "backend"]).spawn();
 }

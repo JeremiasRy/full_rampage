@@ -345,13 +345,13 @@ pub mod gamelogic {
         players: HashMap<i32, Player>,
         cannon_shots: HashMap<i32, CannonShot>,
         explosions: HashMap<i32, Explosion>,
-        id_count: i32
+        internal_id_count: i32
     }
 
     impl GameController {
         pub fn new() -> GameController {
             GameController {
-                id_count: 0,
+                internal_id_count: 0,
                 height: BOUNDS_HEIGHT,
                 width: BOUNDS_WIDTH,
                 players: HashMap::<i32, Player>::new(),
@@ -364,8 +364,8 @@ pub mod gamelogic {
                 player.tick();
 
                 if let Some(cannon_shot) = player.cannon_shot.take() {
-                    self.id_count += 1;
-                    self.cannon_shots.insert(self.id_count, cannon_shot);
+                    self.internal_id_count += 1;
+                    self.cannon_shots.insert(self.internal_id_count, cannon_shot);
                 }
             }
             if !self.explosions.is_empty() {
@@ -416,9 +416,9 @@ pub mod gamelogic {
 
                     cannon_shot_response_vec.push(cannon_shot_response);
                 } else {
-                    self.id_count += 1;
+                    self.internal_id_count += 1;
                     if let Some(last_position) = cannon_shot.last_position {
-                        self.explosions.insert(self.id_count, Explosion::new(cannon_shot.from_player_id, last_position));
+                        self.explosions.insert(self.internal_id_count, Explosion::new(cannon_shot.from_player_id, last_position));
                     } else {
                         println!("No last position found for cannon shot?")
                     }
@@ -445,10 +445,8 @@ pub mod gamelogic {
 
             server_output
         }
-        pub fn add_player(&mut self) -> i32 {
-            self.id_count += 1;
-            self.players.insert(self.id_count,Player::new(self.id_count, self.height, self.width));
-            self.id_count
+        pub fn add_player(&mut self, id:i32) {
+            self.players.insert(id,Player::new(id, self.height, self.width));
         }
         pub fn drop_player(&mut self, player_id: i32) {
             self.players.remove_entry(&player_id);

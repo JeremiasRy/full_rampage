@@ -1,109 +1,129 @@
+use std::collections::hash_map::ValuesMut;
 use std::collections::HashMap;
+use tokio::sync::mpsc::Sender;
 use std::time::Duration;
-use std::sync::Arc;
 use protobuf::Message;
-use tokio::sync::Mutex;
 use futures_util::stream::{SplitSink, StreamExt};
 use futures_util::SinkExt;
 use tokio::net::{TcpListener, TcpStream};
+use tokio::sync::mpsc::Receiver;
 use tokio::time::Instant;
 use tokio_tungstenite::{accept_async, WebSocketStream};
 use backend::gamelogic::GameController;
-use backend::ServerOutput;
+use backend::{MessageType, ServerOutput};
 use backend::InputRequest;
 use backend::PlayerId;
 
-type GameControllerArc = Arc<Mutex<GameController>>;
-type TcpStreamWriteArc = Arc<Mutex<SplitSink<WebSocketStream<TcpStream>, tokio_tungstenite::tungstenite::Message>>>;
-type ConnectionPool = Arc<Mutex<HashMap<i32, TcpStreamWriteArc>>>;
+type TokioMessage = tokio_tungstenite::tungstenite::Message;
+#[derive(Debug)]
+struct NewPlayerConnection {
+    id: i32,
+    sink:  SplitSink<WebSocketStream<TcpStream>, TokioMessage>,
+}
+enum TxMessage  {
+    SuccessfulConnection(NewPlayerConnection),
+    PlayerInput(InputRequest),
+    Disconnect(i32),
+    Tick
+}
 
 #[tokio::main]
 async fn main() {
-    let game_controller:GameControllerArc = Arc::new(Mutex::new(GameController::new()));
-    let connection_pool: ConnectionPool = Arc::new(Mutex::new(HashMap::new()));
+    let (sender, receiver) = tokio::sync::mpsc::channel::<TxMessage>(100);
+    let mut id_count:i32 = 0;
 
     let addr = "127.0.0.1:9999";
     let listener = TcpListener::bind(addr).await.expect("Failed to start server");
 
     println!("Server running at {}!", addr);
-    tokio::spawn(game_controller_updater(game_controller.clone(), connection_pool.clone()));
+
+    let game_ticker_send = sender.clone();
+
+    tokio::spawn(main_game_loop(receiver));
+    tokio::spawn(async move {
+        let tick_rate = Duration::from_secs_f64(1.0 / 120.0); // 120 fps
+        let mut last_tick = Instant::now();
+        
+        loop {
+            let elapsed = Instant::now().duration_since(last_tick);
+            if elapsed < tick_rate {
+                tokio::time::sleep(tick_rate - elapsed).await;
+            }
+            last_tick = Instant::now();
+            let _ = game_ticker_send.send(TxMessage::Tick).await;
+        }
+    });
+
     while let Ok((stream, _)) = listener.accept().await {
-        tokio::spawn(handle_connection(stream, game_controller.clone(), connection_pool.clone()));
+        id_count += 1;
+        tokio::spawn(handle_connection(stream, sender.clone(), id_count));
     }
 }
 
-async fn game_controller_updater(game_controller: GameControllerArc, connection_pool: ConnectionPool) {
-    let tick_rate = Duration::from_secs_f64(1.0 / 120.0); // 120 fps
-    let mut last_tick = Instant::now();
-    loop {
+async fn main_game_loop(mut receiver: Receiver<TxMessage>) {
+    let mut game_controller: GameController = GameController::new();
+    let mut connection_pool: HashMap<i32, SplitSink<WebSocketStream<TcpStream>, TokioMessage>> = HashMap::<i32, SplitSink<WebSocketStream<TcpStream>, TokioMessage>>::new();
 
-        let elapsed = Instant::now().duration_since(last_tick);
-        if elapsed < tick_rate {
-            tokio::time::sleep(tick_rate - elapsed).await;
-        }
-        last_tick = Instant::now();
+    while let Some(msg) = receiver.recv().await {
+        match msg {
+            TxMessage::SuccessfulConnection(mut new_connection) => {
+                game_controller.add_player(new_connection.id);
 
-        let mut controller = game_controller.lock().await;
-        if controller.should_tick() {
-            let connections = connection_pool.lock().await;
-            controller.tick();
+                let mut new_player_message = PlayerId::new();
+                new_player_message.set_field_type(MessageType::id_response);
+                new_player_message.set_player_id(new_connection.id);
 
-            let output: ServerOutput = controller.output();
+                let bytes = new_player_message.write_to_bytes().unwrap();
+                let _ = new_connection.sink.send(TokioMessage::binary(bytes)).await;
 
-            for write_arc in connections.values() {
-                let mut write = write_arc.lock().await;
-                let _ = write.send(tokio_tungstenite::tungstenite::Message::binary(output.write_to_bytes().unwrap())).await;
-            };
+                connection_pool.insert(new_connection.id, new_connection.sink);
+                send_output_to_all_clients(connection_pool.values_mut(), game_controller.output()).await;
+            },
+            TxMessage::PlayerInput(input_request) => {
+                game_controller.player_input(input_request);
+            },
+            TxMessage::Disconnect(player_id) => {
+                game_controller.drop_player(player_id);
+                connection_pool.remove_entry(&player_id);
+                send_output_to_all_clients(connection_pool.values_mut(), game_controller.output()).await;
+                println!("Connection dropped!")
+            }, 
+            TxMessage::Tick => {
+                if game_controller.should_tick() {
+                    game_controller.tick();
+                    send_output_to_all_clients(connection_pool.values_mut(), game_controller.output()).await;
+                }
+            }   
         }
     }
+}    
+
+async fn send_output_to_all_clients(connections: ValuesMut<'_, i32, SplitSink<WebSocketStream<TcpStream>, TokioMessage>>, output: ServerOutput) {
+    for write in connections {
+        let _ = write.send(tokio_tungstenite::tungstenite::Message::binary(output.write_to_bytes().unwrap())).await;
+    };
 }
 
-async fn handle_connection(stream: TcpStream, game_controller: GameControllerArc, connection_pool: ConnectionPool) {
-    if let Err(e) = player_connection(stream, game_controller, connection_pool).await {
+async fn handle_connection(stream: TcpStream, sender: Sender<TxMessage>, player_id: i32) {
+    if let Err(e) = player_connection(stream, sender, player_id).await {
         println!("Something happened: {:?}", e)
     }
 }
 
-async fn player_connection(stream: TcpStream, game_controller: GameControllerArc, connection_pool: ConnectionPool) -> Result<(), tokio_tungstenite::tungstenite::Error> {
+async fn player_connection(stream: TcpStream, sender: Sender<TxMessage>, player_id: i32) -> Result<(), tokio_tungstenite::tungstenite::Error> {
     let incoming_stream: WebSocketStream<TcpStream> = accept_async(stream).await.expect("Things went south during the handshake process");
+    let (write, mut read) = incoming_stream.split();
+
+    let _ = sender.send(TxMessage::SuccessfulConnection(NewPlayerConnection {id: player_id, sink: write})).await;
     println!("Connection established!");
-
-    let (mut write, mut read) = incoming_stream.split();
-
-    let connection_player_index;
-
-    { // add the new player to the game controller and to the connection pool, send info of new player to all clients
-        let mut controller = game_controller.lock().await;
-        connection_player_index = controller.add_player();
-        
-        let mut message = PlayerId::new();
-        message.set_player_id(connection_player_index);
-        message.set_field_type(backend::MessageType::id_response);
-        
-        let bytes = message.write_to_bytes().unwrap();
-        let _ = write.send(tokio_tungstenite::tungstenite::Message::Binary(bytes)).await;
-        let _ = write.send(tokio_tungstenite::tungstenite::Message::Binary(controller.output().write_to_bytes().unwrap())).await;
-
-        let mut connections = connection_pool.lock().await;
-        connections.insert(connection_player_index, Arc::new(Mutex::new(write)));
-    }
 
     while let Some(Ok(msg)) = read.next().await {
         if msg.is_binary() {
             let input_request:InputRequest = InputRequest::parse_from_bytes(&msg.into_data()).unwrap();
-            let mut controller = game_controller.lock().await;
-            controller.player_input(input_request);
+            let _ = sender.send(TxMessage::PlayerInput(input_request)).await;
         }
     }
-
-    { // clean up once the connection is dropped
-        let mut controller = game_controller.lock().await;
-        controller.drop_player(connection_player_index);
-
-        let mut connections = connection_pool.lock().await;
-        connections.remove_entry(&connection_player_index);
-        println!("Thank you for playing!");
-    }
+    let _ = sender.send(TxMessage::Disconnect(player_id)).await;
     Ok(())
 }
 

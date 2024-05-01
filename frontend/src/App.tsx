@@ -73,7 +73,6 @@ function App() {
     ) {
       return;
     }
-    console.log(keysArray);
     const payload = {
       playerId: id,
       input: keysArray.reduce((a, b) => a + b, 0),
