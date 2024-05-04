@@ -111,19 +111,26 @@ async fn handle_connection(stream: TcpStream, sender: Sender<TxMessage>, player_
 }
 
 async fn player_connection(stream: TcpStream, sender: Sender<TxMessage>, player_id: i32) -> Result<(), tokio_tungstenite::tungstenite::Error> {
-    let incoming_stream: WebSocketStream<TcpStream> = accept_async(stream).await.expect("Things went south during the handshake process");
-    let (write, mut read) = incoming_stream.split();
+    let incoming_stream_result: Result<WebSocketStream<TcpStream>, tokio_tungstenite::tungstenite::Error> = accept_async(stream).await;
+    match incoming_stream_result {
+        Ok(incoming_stream) => {
+            let (write, mut read) = incoming_stream.split();
 
-    let _ = sender.send(TxMessage::SuccessfulConnection(NewPlayerConnection {id: player_id, sink: write})).await;
-    println!("Connection established!");
+            let _ = sender.send(TxMessage::SuccessfulConnection(NewPlayerConnection {id: player_id, sink: write})).await;
+            println!("Connection established!");
 
-    while let Some(Ok(msg)) = read.next().await {
-        if msg.is_binary() {
-            let input_request:InputRequest = InputRequest::parse_from_bytes(&msg.into_data()).unwrap();
-            let _ = sender.send(TxMessage::PlayerInput(input_request)).await;
+            while let Some(Ok(msg)) = read.next().await {
+                if msg.is_binary() {
+                    let input_request:InputRequest = InputRequest::parse_from_bytes(&msg.into_data()).unwrap();
+                    let _ = sender.send(TxMessage::PlayerInput(input_request)).await;
+                }
+            }
+            let _ = sender.send(TxMessage::Disconnect(player_id)).await;
+            Ok(())
+        }, Err(error) => {
+            println!("{:?}", error);
+            Ok(())
         }
     }
-    let _ = sender.send(TxMessage::Disconnect(player_id)).await;
-    Ok(())
 }
 
