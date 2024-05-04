@@ -89,9 +89,7 @@ async fn main_game_loop(mut receiver: Receiver<TxMessage>) {
                 println!("Connection dropped!")
             }, 
             TxMessage::Tick => {
-                println!("Tick called!");
                 if game_controller.should_tick() {
-                    println!("and we actually ticked!");
                     game_controller.tick();
                     send_output_to_all_clients(connection_pool.values_mut(), game_controller.output()).await;
                 }

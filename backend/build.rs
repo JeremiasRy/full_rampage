@@ -2,7 +2,6 @@ use std::env;
 use std::fs::{read_to_string, File};
 use std::io::{BufWriter, Write};
 use std::path::Path;
-use std::process::Command;
 
 extern crate protoc_rust;
 

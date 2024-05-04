@@ -24,6 +24,7 @@ message InputRequest {
 message PlayerResponse {
     Point position = 1;
     Point cannon_position = 2;
+    bool dead = 3;
 }
 
 message CannonEventResponse {

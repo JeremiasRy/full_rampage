@@ -12,6 +12,7 @@ export type PlayerId = {
 export type PlayerResponse = {
   position: Position;
   cannonPosition: Position;
+  dead: boolean;
 };
 export type CannonEventResponse = {
   position: Position;

@@ -2,7 +2,7 @@ include!(concat!(env!("OUT_DIR"), "/messages.rs"));
 
 pub mod gamelogic {
     use crate::{CannonEventResponse, PlayerResponse, Point, ServerOutput};
-    use std::collections::VecDeque;
+    use std::{collections::VecDeque, ops::Mul};
     use std::collections::hash_map::HashMap;
     use protobuf::RepeatedField;
     use rand::{thread_rng, Rng};
@@ -95,7 +95,13 @@ pub mod gamelogic {
             if (self.position.x - player_pos.x).abs() > radius_and_player_size && (self.position.y - player_pos.y).abs() > radius_and_player_size {
                 return false
             }
-            true
+            let closest_x = (self.position.x).max(player_pos.x).min(player_pos.x + PLAYER_SIZE);
+            let closest_y = (self.position.y).max(player_pos.y).min(player_pos.y + PLAYER_SIZE);
+
+            let distance_x = self.position.x - closest_x;
+            let distance_y = self.position.y - closest_y;
+
+            distance_x * distance_x + distance_y * distance_y < (self.size * self.size) as f32
         }
     }
 
@@ -178,6 +184,12 @@ pub mod gamelogic {
         }
     }
 
+    #[derive(Debug, PartialEq)]
+    enum PlayerStatus {
+        Alive,
+        Dead,
+    }
+
     #[derive(Debug)]
     struct Player {
         id: i32,
@@ -190,6 +202,8 @@ pub mod gamelogic {
         delta_x: f32,
         delta_y: f32,
         delta_a: f32,
+        cooldown: i32,
+        status: PlayerStatus
     }
 
     impl Player {
@@ -205,9 +219,24 @@ pub mod gamelogic {
                 is_loading_cannon: false,
                 cannon_shot: None,
                 power_loaded: 0,
+                cooldown: 0,
+                status: PlayerStatus::Alive
             }
         }
+        pub fn die(&mut self) {
+            self.status = PlayerStatus::Dead;
+            self.cooldown = 240;
+        }
         pub fn tick(&mut self) {
+
+            if self.cooldown > 0 {
+                self.cooldown -= 1;
+                if self.cooldown <= 0 {
+                    self.status = PlayerStatus::Alive;
+                }
+                return;
+            }
+
             self.check_vertical();
 
             self.check_horizontal();
@@ -223,7 +252,7 @@ pub mod gamelogic {
             self.translate();
         }
         pub fn should_tick(&self) -> bool {
-            self.cannon_shot.is_some() || self.input > 0 || self.delta_x != 0.0 || self.delta_y != 0.0
+            self.cooldown > 0 || self.cannon_shot.is_some() || self.input > 0 || self.delta_x != 0.0 || self.delta_y != 0.0
         }
         pub fn input(&mut self, input:i32) {
             self.input = input
@@ -381,9 +410,9 @@ pub mod gamelogic {
                         explosions_marked_for_remove.push(*id);
                         continue;
                     }
-                    //for (_, player) in self.players.iter().filter(|(_, player)| explosion.check_for_hit(player.position)) {
-                        //println!("HIT!")
-                    //};
+                    for (_, player) in self.players.iter_mut().filter(|(_, player)| explosion.check_for_hit(player.position)) {
+                        player.die();
+                    };
                 }
             }
 
@@ -419,6 +448,7 @@ pub mod gamelogic {
                 let mut player_response = PlayerResponse::new();
                 player_response.set_position(player.position.to_buffer_point());
                 player_response.set_cannon_position(player.get_cannon_position().to_buffer_point());
+                player_response.set_dead(player.status == PlayerStatus::Dead);
                 player_response_vec.push(player_response)
             }
 
