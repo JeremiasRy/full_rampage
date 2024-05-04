@@ -300,6 +300,7 @@ pub mod gamelogic {
             }
             if self.input.contains(PlayerInput::Fire) && self.is_loading_cannon {
                 self.cannon_shot = Some(CannonShot::new( self.id, self.get_cannon_position(), self.cannon_angle, self.power_loaded));
+                self.input -= PlayerInput::Fire as i32;
                 self.is_loading_cannon = false;
                 self.power_loaded = 0;
             }
@@ -359,8 +360,8 @@ pub mod gamelogic {
             }
         }
         pub fn tick(&mut self) {
-            let mut cannon_shot_ids_marked_for_remove = Vec::<i32>::new();
-            let mut explosions_marked_for_remove = Vec::<i32>::new();
+            let mut cannon_shot_ids_marked_for_remove = Vec::with_capacity(self.cannon_shots.len());
+            let mut explosions_marked_for_remove = Vec::with_capacity(self.explosions.len());
 
             if !self.cannon_shots.is_empty() {
                 for (id, cannon_shot) in self.cannon_shots.iter_mut() {
@@ -386,13 +387,6 @@ pub mod gamelogic {
                 }
             }
 
-            for id in cannon_shot_ids_marked_for_remove {
-                self.cannon_shots.remove_entry(&id);
-            }
-            for id in explosions_marked_for_remove {
-                self.explosions.remove_entry(&id);
-            }
-
             for (_, player) in self.players.iter_mut().filter(|(_, player)| player.should_tick()) {
                 player.tick();
 
@@ -400,6 +394,12 @@ pub mod gamelogic {
                     self.internal_id_count += 1;
                     self.cannon_shots.insert(self.internal_id_count, cannon_shot);
                 }
+            }
+            for id in cannon_shot_ids_marked_for_remove {
+                self.cannon_shots.remove_entry(&id);
+            }
+            for id in explosions_marked_for_remove {
+                self.explosions.remove_entry(&id);
             }
         }
         pub fn should_tick(&self) -> bool {
