@@ -89,6 +89,14 @@ pub mod gamelogic {
             }
             self.size += 10;
         }
+        pub fn check_for_hit(&mut self, player_pos: ControllerPoint) -> bool {
+            let current_explosion_radius = self.size / 2;
+            let radius_and_player_size = current_explosion_radius as f32 + PLAYER_SIZE;
+            if (self.position.x - player_pos.x).abs() > radius_and_player_size && (self.position.y - player_pos.y).abs() > radius_and_player_size {
+                return false
+            }
+            true
+        }
     }
 
     #[derive(Debug)]
@@ -96,11 +104,7 @@ pub mod gamelogic {
         from_player_id: i32,
         distance_to_travel: f32,
         trajectory: VecDeque<ControllerPoint>,
-        last_position: Option<ControllerPoint>
-    }
-
-    struct CannonShotPosition {
-        size: i32,
+        last_position: Option<ControllerPoint>,
         position: Option<ControllerPoint>
     }
 
@@ -121,19 +125,14 @@ pub mod gamelogic {
 
             result
         }
-        pub fn get_pos(&mut self) -> CannonShotPosition {
-            let position = self.trajectory.pop_front();
+        pub fn tick(&mut self) {
+            self.position = self.trajectory.pop_front();
 
-            match position {
+            match self.position {
                 Some(pos) => {
                     self.last_position = Some(pos.clone());
                 },
                 _ => ()
-            }
-
-            CannonShotPosition {
-                position,
-                size: self.count_size()
             }
         }
         pub fn new(from_player_id: i32, from: ControllerPoint, angle: f32, power: i32) -> Self {
@@ -171,6 +170,7 @@ pub mod gamelogic {
             }
             CannonShot {
                 last_position: None,
+                position: None,
                 from_player_id,
                 distance_to_travel: trajectory.len() as f32,
                 trajectory
@@ -318,7 +318,6 @@ pub mod gamelogic {
             }
 
             if horizontal_check < 0 || horizontal_check + (PLAYER_SIZE as i32) > BOUNDS_WIDTH {
-
                 if self.delta_x < 0.0 {
                     self.delta_x = 0.0 + self.delta_x.abs();
                 } else if self.delta_x > 0.0 {
@@ -360,69 +359,30 @@ pub mod gamelogic {
             }
         }
         pub fn tick(&mut self) {
-            for (_, player) in self.players.iter_mut().filter(|(_, player)| player.should_tick()) {
-                player.tick();
-
-                if let Some(cannon_shot) = player.cannon_shot.take() {
-                    self.internal_id_count += 1;
-                    self.cannon_shots.insert(self.internal_id_count, cannon_shot);
-                }
-            }
-            if !self.explosions.is_empty() {
-                self.explosions.iter_mut().for_each(| (_, explosion) | explosion.tick())
-            }
-        }
-        pub fn should_tick(&self) -> bool {
-            self.cannon_shots.len() > 0 || self.players.iter().any(|(_, player)| player.should_tick())
-        }
-        pub fn player_input(&mut self, input: InputRequest) {
-            if let Some(player) = self.players.get_mut(&input.get_player_id()) {
-                player.input(input.get_input());
-            };
-        }
-        pub fn output(&mut self) -> ServerOutput {
-            let player_response_vec: Vec<PlayerResponse> = self.players.values_mut().map(|player| {
-                let mut response_object = PlayerResponse::new();
-                response_object.set_position(player.position.to_buffer_point());
-                response_object.set_cannon_position(player.get_cannon_position().to_buffer_point());
-                response_object
-            }).collect();
-
-            let mut cannon_shot_response_vec = Vec::<CannonEventResponse>::new();
-            let mut exlosion_response_vec = Vec::<CannonEventResponse>::new();
-            
             let mut cannon_shot_ids_marked_for_remove = Vec::<i32>::new();
             let mut explosions_marked_for_remove = Vec::<i32>::new();
 
-            for (id, explosion) in self.explosions.iter_mut() {
-                if explosion.size <= 0 {
-                    explosions_marked_for_remove.push(*id);
-                    continue;
+            if !self.cannon_shots.is_empty() {
+                for (id, cannon_shot) in self.cannon_shots.iter_mut() {
+                    cannon_shot.tick();
+                    if let None = cannon_shot.position {
+                        self.internal_id_count += 1;
+                        cannon_shot_ids_marked_for_remove.push(*id);
+                        self.explosions.insert(self.internal_id_count, Explosion::new(cannon_shot.from_player_id, cannon_shot.last_position.unwrap()));
+                    }
                 }
-                let mut explosion_response = CannonEventResponse::new();
-
-                explosion_response.set_position(explosion.position.to_buffer_point());
-                explosion_response.set_size(explosion.size);
-                exlosion_response_vec.push(explosion_response);
             }
 
-            for (id, cannon_shot) in self.cannon_shots.iter_mut() {
-                let cannon_shot_state = cannon_shot.get_pos();
-
-                if let Some(position) = cannon_shot_state.position {
-                    let mut cannon_shot_response = CannonEventResponse::new();
-                    cannon_shot_response.set_position(position.to_buffer_point());
-                    cannon_shot_response.set_size(cannon_shot_state.size);
-
-                    cannon_shot_response_vec.push(cannon_shot_response);
-                } else {
-                    self.internal_id_count += 1;
-                    if let Some(last_position) = cannon_shot.last_position {
-                        self.explosions.insert(self.internal_id_count, Explosion::new(cannon_shot.from_player_id, last_position));
-                    } else {
-                        println!("No last position found for cannon shot?")
+            if !self.explosions.is_empty() {
+                for (id, explosion) in self.explosions.iter_mut() {
+                    explosion.tick();
+                    if explosion.size <= 0 {
+                        explosions_marked_for_remove.push(*id);
+                        continue;
                     }
-                    cannon_shot_ids_marked_for_remove.push(*id);
+                    //for (_, player) in self.players.iter().filter(|(_, player)| explosion.check_for_hit(player.position)) {
+                        //println!("HIT!")
+                    //};
                 }
             }
 
@@ -433,6 +393,52 @@ pub mod gamelogic {
                 self.explosions.remove_entry(&id);
             }
 
+            for (_, player) in self.players.iter_mut().filter(|(_, player)| player.should_tick()) {
+                player.tick();
+
+                if let Some(cannon_shot) = player.cannon_shot.take() {
+                    self.internal_id_count += 1;
+                    self.cannon_shots.insert(self.internal_id_count, cannon_shot);
+                }
+            }
+        }
+        pub fn should_tick(&self) -> bool {
+            self.cannon_shots.len() > 0 || self.players.iter().any(|(_, player)| player.should_tick()) || !self.explosions.is_empty()
+        }
+        pub fn player_input(&mut self, input: InputRequest) {
+            if let Some(player) = self.players.get_mut(&input.get_player_id()) {
+                player.input(input.get_input());
+            };
+        }
+        pub fn output(&mut self) -> ServerOutput {
+            let mut player_response_vec: Vec<PlayerResponse> = Vec::<PlayerResponse>::new();
+            let mut cannon_shot_response_vec = Vec::<CannonEventResponse>::new();
+            let mut exlosion_response_vec = Vec::<CannonEventResponse>::new();
+
+            for player in self.players.values() {
+                let mut player_response = PlayerResponse::new();
+                player_response.set_position(player.position.to_buffer_point());
+                player_response.set_cannon_position(player.get_cannon_position().to_buffer_point());
+                player_response_vec.push(player_response)
+            }
+
+            for explosion in self.explosions.values() {
+                let mut explosion_response = CannonEventResponse::new();
+
+                explosion_response.set_position(explosion.position.to_buffer_point());
+                explosion_response.set_size(explosion.size);
+                exlosion_response_vec.push(explosion_response);
+            }
+
+            for cannon_shot in self.cannon_shots.values() {
+                if let Some(position) = cannon_shot.position {
+                    let mut cannon_shot_response = CannonEventResponse::new();
+                    cannon_shot_response.set_position(position.to_buffer_point());
+                    cannon_shot_response.set_size(cannon_shot.count_size());
+
+                    cannon_shot_response_vec.push(cannon_shot_response);
+                } 
+            }
 
             let mut server_output = ServerOutput::new();
             let players = RepeatedField::from_vec(player_response_vec);
