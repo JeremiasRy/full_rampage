@@ -104,7 +104,7 @@ function App() {
 
     protoLoad();
 
-    const socket = new WebSocket("ws://127.0.0.1:9999");
+    const socket = new WebSocket("ws://192.168.1.116/backend");
 
     socket.addEventListener("message", async (event): Promise<void> => {
       if (!protoRoot || !protoEnum) {
