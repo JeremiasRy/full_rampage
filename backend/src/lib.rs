@@ -246,10 +246,16 @@ pub mod gamelogic {
             self.check_shooting();
 
             if self.is_moving() {
-                self.check_collision();
+                self.check_wall_collision();
             }
 
             self.translate();
+        }
+        pub fn check_player_collision(&self, other: &Player) -> bool {
+            !(self.position.x + PLAYER_SIZE <= other.position.x || 
+            self.position.y + PLAYER_SIZE <= other.position.y || 
+            other.position.x + PLAYER_SIZE <= self.position.x ||
+            other.position.y + PLAYER_SIZE <= self.position.y) 
         }
         pub fn should_tick(&self) -> bool {
             self.cooldown > 0 || self.cannon_shot.is_some() || self.input > 0 || self.delta_x != 0.0 || self.delta_y != 0.0
@@ -335,7 +341,7 @@ pub mod gamelogic {
             }
         }
 
-        fn check_collision(&mut self) {
+        fn check_wall_collision(&mut self) {
             let horizontal_check = (self.position.x + self.delta_x) as i32;
             let vertical_check = (self.position.y + self.delta_y) as i32;
 
@@ -371,6 +377,7 @@ pub mod gamelogic {
     pub struct GameController {
         height: i32,
         width: i32,
+        handle_collisions: VecDeque<(i32, i32)>,
         players: HashMap<i32, Player>,
         cannon_shots: HashMap<i32, CannonShot>,
         explosions: HashMap<i32, Explosion>,
@@ -385,12 +392,30 @@ pub mod gamelogic {
                 width: BOUNDS_WIDTH,
                 players: HashMap::<i32, Player>::new(),
                 cannon_shots: HashMap::<i32, CannonShot>::new(),
-                explosions: HashMap::<i32, Explosion>::new()
+                explosions: HashMap::<i32, Explosion>::new(),
+                handle_collisions: VecDeque::<(i32, i32)>::new(),
             }
         }
         pub fn tick(&mut self) {
             let mut cannon_shot_ids_marked_for_remove = Vec::with_capacity(self.cannon_shots.len());
             let mut explosions_marked_for_remove = Vec::with_capacity(self.explosions.len());
+
+            self.check_player_collisions();
+            println!("We have {} collisions in tick", self.handle_collisions.len());
+            while let Some(player_id_pair) = self.handle_collisions.pop_front() {
+                let player_ids = vec![player_id_pair.0, player_id_pair.1];
+                let mut players: Vec<&mut Player> = self.players
+                    .iter_mut()
+                    .filter(|(id, _)| player_ids.contains(id))
+                    .map(|(_, player)| player)
+                    .collect();
+
+                if let [first, second] = &mut players[..] {
+                    GameController::handle_collision(first, second);
+                } else {
+                    panic!("Failed to obtain two mutable references to players");
+                }
+            }
 
             if !self.cannon_shots.is_empty() {
                 for (id, cannon_shot) in self.cannon_shots.iter_mut() {
@@ -416,14 +441,14 @@ pub mod gamelogic {
                 }
             }
 
-            for (_, player) in self.players.iter_mut().filter(|(_, player)| player.should_tick()) {
+            for player in self.players.values_mut().filter(|player| player.should_tick()) {
                 player.tick();
-
                 if let Some(cannon_shot) = player.cannon_shot.take() {
                     self.internal_id_count += 1;
                     self.cannon_shots.insert(self.internal_id_count, cannon_shot);
                 }
             }
+
             for id in cannon_shot_ids_marked_for_remove {
                 self.cannon_shots.remove_entry(&id);
             }
@@ -438,6 +463,12 @@ pub mod gamelogic {
             if let Some(player) = self.players.get_mut(&input.get_player_id()) {
                 player.input(input.get_input());
             };
+        }
+        pub fn add_player(&mut self, id:i32) {
+            self.players.insert(id,Player::new(id, self.height, self.width));
+        }
+        pub fn drop_player(&mut self, player_id: i32) {
+            self.players.remove_entry(&player_id);
         }
         pub fn output(&mut self) -> ServerOutput {
             let mut player_response_vec: Vec<PlayerResponse> = Vec::<PlayerResponse>::new();
@@ -481,11 +512,19 @@ pub mod gamelogic {
 
             server_output
         }
-        pub fn add_player(&mut self, id:i32) {
-            self.players.insert(id,Player::new(id, self.height, self.width));
+        fn check_player_collisions(&mut self) {
+            for player in self.players.values() {
+                for other_player in self.players.values().filter(|other_player| player.id != other_player.id) {
+                    if player.check_player_collision(other_player) {
+                        if !self.handle_collisions.iter().any(|(first, second)| *first == player.id || *first == other_player.id ||*second == player.id || *second == other_player.id) {
+                            self.handle_collisions.push_back((player.id, other_player.id));
+                        }
+                    }
+                }
+            }
         }
-        pub fn drop_player(&mut self, player_id: i32) {
-            self.players.remove_entry(&player_id);
+        fn handle_collision(first: &mut Player, second: &mut Player) {
+            // lets handle
         }
     }
 }

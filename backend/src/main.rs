@@ -33,15 +33,15 @@ async fn main() {
     let mut id_count:i32 = 0;
 
     let addr = "127.0.0.1:9999";
-    let listener = TcpListener::bind(addr).await.expect("Failed to start server");
+    let listener = TcpListener::bind(addr).await.expect("Failed to start server"); // TODO logging
 
-    println!("Server running at {}!", addr);
+    println!("Server running at {}!", addr); // TODO logging
 
     let game_ticker_send = sender.clone();
 
     tokio::spawn(main_game_loop(receiver));
     tokio::spawn(async move {
-        let tick_rate = Duration::from_secs_f64(1.0 / 120.0); // 120 fps
+        let tick_rate = Duration::from_secs_f64(1.0 / 10.0); // 120 fps
         let mut last_tick = Instant::now();
         
         loop {
@@ -55,6 +55,7 @@ async fn main() {
     });
 
     while let Ok((stream, _)) = listener.accept().await {
+        // LOG incoming connection
         id_count += 1;
         tokio::spawn(handle_connection(stream, sender.clone(), id_count));
     }
@@ -86,7 +87,7 @@ async fn main_game_loop(mut receiver: Receiver<TxMessage>) {
                 game_controller.drop_player(player_id);
                 connection_pool.remove_entry(&player_id);
                 send_output_to_all_clients(connection_pool.values_mut(), game_controller.output()).await;
-                println!("Connection dropped!")
+                println!("Connection dropped!") // TODO logging
             }, 
             TxMessage::Tick => {
                 if game_controller.should_tick() {
@@ -106,7 +107,7 @@ async fn send_output_to_all_clients(connections: ValuesMut<'_, i32, SplitSink<We
 
 async fn handle_connection(stream: TcpStream, sender: Sender<TxMessage>, player_id: i32) {
     if let Err(e) = player_connection(stream, sender, player_id).await {
-        println!("Something happened: {:?}", e)
+        println!("Something happened: {:?}", e) // TODO logging
     }
 }
 
@@ -117,7 +118,7 @@ async fn player_connection(stream: TcpStream, sender: Sender<TxMessage>, player_
             let (write, mut read) = incoming_stream.split();
 
             let _ = sender.send(TxMessage::SuccessfulConnection(NewPlayerConnection {id: player_id, sink: write})).await;
-            println!("Connection established!");
+            println!("Connection established!"); // TODO logging
 
             while let Some(Ok(msg)) = read.next().await {
                 if msg.is_binary() {
@@ -127,7 +128,7 @@ async fn player_connection(stream: TcpStream, sender: Sender<TxMessage>, player_
             }
             let _ = sender.send(TxMessage::Disconnect(player_id)).await;
             Ok(())
-        }, Err(error) => {
+        }, Err(error) => { // Let's do some logging here later
             println!("{:?}", error);
             Ok(())
         }
