@@ -219,8 +219,8 @@ pub mod gamelogic {
                 is_loading_cannon: false,
                 cannon_shot: None,
                 power_loaded: 0,
-                cooldown: 0,
-                status: PlayerStatus::Alive
+                cooldown: 120,
+                status: PlayerStatus::Dead
             }
         }
         pub fn die(&mut self) {
@@ -262,6 +262,26 @@ pub mod gamelogic {
         }
         pub fn input(&mut self, input:i32) {
             self.input = input
+        }
+        pub fn reverse_forces(&mut self) {
+            self.reverse_delta_y();
+            self.reverse_delta_x();
+        }
+
+        fn reverse_delta_y(&mut self) {
+            if self.delta_y < 0.0 {
+                self.delta_y = 0.0 + self.delta_y.abs()
+            } else if self.delta_y > 0.0 {
+                self.delta_y = 0.0 - self.delta_y
+            }
+        }
+
+        fn reverse_delta_x(&mut self) {
+            if self.delta_x < 0.0 {
+                self.delta_x = 0.0 + self.delta_x.abs();
+            } else if self.delta_x > 0.0 {
+                self.delta_x = 0.0 - self.delta_x;
+            }
         }
 
         fn translate(&mut self) {
@@ -346,19 +366,11 @@ pub mod gamelogic {
             let vertical_check = (self.position.y + self.delta_y) as i32;
 
             if vertical_check < 0 || vertical_check + (PLAYER_SIZE as i32) > BOUNDS_HEIGHT {
-                if self.delta_y < 0.0 {
-                    self.delta_y = 0.0 + self.delta_y.abs()
-                } else if self.delta_y > 0.0 {
-                    self.delta_y = 0.0 - self.delta_y
-                }
+                self.reverse_delta_y()
             }
 
             if horizontal_check < 0 || horizontal_check + (PLAYER_SIZE as i32) > BOUNDS_WIDTH {
-                if self.delta_x < 0.0 {
-                    self.delta_x = 0.0 + self.delta_x.abs();
-                } else if self.delta_x > 0.0 {
-                    self.delta_x = 0.0 - self.delta_x;
-                }
+                self.reverse_delta_x()
             }
         }
 
@@ -400,7 +412,6 @@ pub mod gamelogic {
             let mut cannon_shot_ids_marked_for_remove = Vec::with_capacity(self.cannon_shots.len());
             let mut explosions_marked_for_remove = Vec::with_capacity(self.explosions.len());
 
-            self.check_player_collisions();
             println!("We have {} collisions in tick", self.handle_collisions.len());
             while let Some(player_id_pair) = self.handle_collisions.pop_front() {
                 let player_ids = vec![player_id_pair.0, player_id_pair.1];
@@ -448,6 +459,7 @@ pub mod gamelogic {
                     self.cannon_shots.insert(self.internal_id_count, cannon_shot);
                 }
             }
+            self.check_player_collisions();
 
             for id in cannon_shot_ids_marked_for_remove {
                 self.cannon_shots.remove_entry(&id);
@@ -516,7 +528,7 @@ pub mod gamelogic {
             for player in self.players.values() {
                 for other_player in self.players.values().filter(|other_player| player.id != other_player.id) {
                     if player.check_player_collision(other_player) {
-                        if !self.handle_collisions.iter().any(|(first, second)| *first == player.id || *first == other_player.id ||*second == player.id || *second == other_player.id) {
+                        if !self.handle_collisions.iter().any(|(first, second)| [*first, *second].contains(&player.id) || [*first, *second].contains(&other_player.id)) {
                             self.handle_collisions.push_back((player.id, other_player.id));
                         }
                     }
@@ -524,7 +536,8 @@ pub mod gamelogic {
             }
         }
         fn handle_collision(first: &mut Player, second: &mut Player) {
-            // lets handle
+            first.reverse_forces();
+            second.reverse_forces();
         }
     }
 }
