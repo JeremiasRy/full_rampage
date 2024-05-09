@@ -1,7 +1,7 @@
 include!(concat!(env!("OUT_DIR"), "/messages.rs"));
 
 pub mod gamelogic {
-    use crate::{CannonEventResponse, PlayerResponse, Point, ServerOutput};
+    use crate::{CannonEventResponse, PlayerResponse, PlayerStatus, Point, ServerOutput};
     use std::collections::VecDeque;
     use std::collections::hash_map::HashMap;
     use protobuf::RepeatedField;
@@ -217,12 +217,6 @@ pub mod gamelogic {
         }
     }
 
-    #[derive(Debug, PartialEq)]
-    enum PlayerStatus {
-        Alive,
-        Dead,
-    }
-
     #[derive(Debug)]
     struct Player {
         id: i32,
@@ -253,19 +247,31 @@ pub mod gamelogic {
                 cannon_shot: None,
                 power_loaded: 0,
                 cooldown: 120,
-                status: PlayerStatus::Dead
+                status: PlayerStatus::respawning
             }
         }
         pub fn die(&mut self) {
-            self.status = PlayerStatus::Dead;
-            self.cooldown = 240;
+            self.status = PlayerStatus::dead;
+            self.cooldown = 120;
         }
         pub fn tick(&mut self) {
 
             if self.cooldown > 0 {
                 self.cooldown -= 1;
-                if self.cooldown <= 0 {
-                    self.status = PlayerStatus::Alive;
+
+                if self.cooldown == 0 {
+
+                    if self.status == PlayerStatus::dead {
+                        self.status = PlayerStatus::respawning;
+                        self.position = ControllerPoint::random_point(BOUNDS_HEIGHT - PLAYER_SIZE as i32, BOUNDS_WIDTH - PLAYER_SIZE as i32);
+                        self.cooldown += 120;
+                        return;
+                    } 
+
+                    if self.status == PlayerStatus::respawning {
+                        self.status = PlayerStatus::alive;
+                        return;
+                    }
                 }
                 return;
             }
@@ -519,8 +525,8 @@ pub mod gamelogic {
                 let mut player_response = PlayerResponse::new();
                 player_response.set_position(player.position.to_buffer_point());
                 player_response.set_cannon_position(player.get_cannon_position().to_buffer_point());
-                player_response.set_dead(player.status == PlayerStatus::Dead);
                 player_response.set_id(player.id);
+                player_response.set_status(player.status);
                 player_response_vec.push(player_response);
             }
 

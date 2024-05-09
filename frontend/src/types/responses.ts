@@ -13,7 +13,7 @@ export type PlayerResponse = {
   id: number;
   position: Position;
   cannonPosition: Position;
-  dead: boolean;
+  status: number;
 };
 export type CannonEventResponse = {
   position: Position;

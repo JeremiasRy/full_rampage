@@ -7,7 +7,7 @@ export interface RampageVehicleProps {
   y: number;
   cannonX: number;
   cannonY: number;
-  dead: boolean;
+  status: number;
 }
 
 function getCenter(vehicle: RampageVehicleProps) {
@@ -19,10 +19,19 @@ function DrawRampageVehicle(props: RampageVehicleProps) {
   const [cannonFlicker, setCannonFlickerColor] = useState(0xffffff);
   const drawProps = useMemo(() => {
     return { ...props };
-  }, [props.x, props.y, props.cannonX, props.cannonY, props.dead]);
+  }, [props.x, props.y, props.cannonX, props.cannonY, props.status]);
 
   useEffect(() => {
-    if (props.dead) {
+    if (props.status == 1) {
+      const intervalId = setInterval(() => {
+        setFlickerColor((prev) => (prev === 0x0 ? 0xff3300 : 0x0));
+        setCannonFlickerColor((prev) => (prev === 0x0 ? 0xffffff : 0x0));
+      }, 200);
+
+      return () => {
+        clearInterval(intervalId);
+      };
+    } else if (props.status == 2) {
       const intervalId = setInterval(() => {
         setFlickerColor((prev) => (prev === 0x0 ? 0xff3300 : 0x0));
         setCannonFlickerColor((prev) => (prev === 0x0 ? 0xffffff : 0x0));
@@ -32,21 +41,21 @@ function DrawRampageVehicle(props: RampageVehicleProps) {
         clearInterval(intervalId);
       };
     }
-  }, [props.dead]);
+  }, [props.status]);
 
   const draw = useCallback(
     (g: Graphics) => {
-      const { x, y, cannonX, cannonY, centerX, centerY, dead } = {
+      const { x, y, cannonX, cannonY, centerX, centerY, status } = {
         ...drawProps,
         ...getCenter(drawProps),
       };
 
       g.clear()
-        .beginFill(dead ? flicker : 0xff3300)
+        .beginFill(status ? flicker : 0xff3300)
         .drawRect(x, y, 25, 25)
         .endFill()
         .moveTo(centerX, centerY)
-        .lineStyle(2, dead ? cannonFlicker : 0xffffff)
+        .lineStyle(2, status ? cannonFlicker : 0xffffff)
         .lineTo(cannonX, cannonY);
     },
     [drawProps, flicker]

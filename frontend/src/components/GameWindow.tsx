@@ -5,6 +5,7 @@ import { ServerOutput } from "../types/responses";
 
 function GameWindow(props: { serverOutput: ServerOutput }) {
   const { players, shots, explosions } = { ...props.serverOutput }; // make this into context some day
+  console.log(players);
   return (
     <Stage width={1200} height={800}>
       {players.map((player) => (
@@ -14,7 +15,7 @@ function GameWindow(props: { serverOutput: ServerOutput }) {
           y={player.position.y}
           cannonX={player.cannonPosition.x}
           cannonY={player.cannonPosition.y}
-          dead={player.dead}
+          status={player.status}
         />
       ))}
       {shots.map((shot) => (

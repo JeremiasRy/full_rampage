@@ -6,6 +6,12 @@ enum MessageType {
     id_response = 2;
 }
 
+enum PlayerStatus {
+    alive = 0;
+    dead = 1;
+    respawning = 2;
+}
+
 message PlayerId {
     MessageType type = 1;
     int32 player_id = 2;
@@ -24,7 +30,7 @@ message InputRequest {
 message PlayerResponse {
     Point position = 1;
     Point cannon_position = 2;
-    bool dead = 3;
+    PlayerStatus status = 3;
     int32 id = 4;
 }
 
