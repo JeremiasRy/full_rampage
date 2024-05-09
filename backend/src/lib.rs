@@ -2,7 +2,7 @@ include!(concat!(env!("OUT_DIR"), "/messages.rs"));
 
 pub mod gamelogic {
     use crate::{CannonEventResponse, PlayerResponse, Point, ServerOutput};
-    use std::{collections::VecDeque, ops::Mul};
+    use std::collections::VecDeque;
     use std::collections::hash_map::HashMap;
     use protobuf::RepeatedField;
     use rand::{thread_rng, Rng};
@@ -91,18 +91,50 @@ pub mod gamelogic {
             self.size += 10;
         }
         pub fn check_for_hit(&mut self, player_pos: ControllerPoint) -> bool {
-            let current_explosion_radius = self.size / 2;
-            let radius_and_player_size = current_explosion_radius as f32 + PLAYER_SIZE;
-            if (self.position.x - player_pos.x).abs() > radius_and_player_size && (self.position.y - player_pos.y).abs() > radius_and_player_size {
-                return false
+            let self_x = self.position.x;
+            let self_y = self.position.y;
+            let current_explosion_radius = (self.size / 2)as f32;
+
+            let min_possible_x = self_x - current_explosion_radius;
+            let max_possible_x = self_x + current_explosion_radius;
+            let min_possible_y = self_y - current_explosion_radius;
+            let max_possible_y = self_y + current_explosion_radius;
+
+            if max_possible_x < player_pos.x || 
+            min_possible_x > player_pos.x + PLAYER_SIZE ||
+            max_possible_y < player_pos.y || 
+            min_possible_y > player_pos.y + PLAYER_SIZE {
+                return false;
             }
-            let closest_x = (self.position.x).max(player_pos.x).min(player_pos.x + PLAYER_SIZE);
-            let closest_y = (self.position.y).max(player_pos.y).min(player_pos.y + PLAYER_SIZE);
 
-            let distance_x = self.position.x - closest_x;
-            let distance_y = self.position.y - closest_y;
+            if self_x >= player_pos.x && 
+            self_x <= player_pos.x + PLAYER_SIZE && 
+            self_y <= player_pos.y && 
+            self_y >= player_pos.y + PLAYER_SIZE {
+                return true;
+            }   
 
-            distance_x * distance_x + distance_y * distance_y < (self.size * self.size) as f32
+            let closest_x = self_x.max(player_pos.x).min(player_pos.x + PLAYER_SIZE);
+            let closest_y = self_y.max(player_pos.y).min(player_pos.y + PLAYER_SIZE);
+
+            let distance_x = self_x - closest_x;
+            let distance_y = self_y - closest_y;
+
+            if distance_x.powi(2) + distance_y.powi(2) <= current_explosion_radius {
+                return true;
+            }
+
+            for &x in &[player_pos.x, player_pos.x + PLAYER_SIZE] {
+                for &y in &[player_pos.y, player_pos.y + PLAYER_SIZE] {
+                    let dx = self_x - x;
+                    let dy = self_y - y;
+                    if dx.powi(2) + dy.powi(2) <= current_explosion_radius.powi(2) {
+                        return true;
+                    }
+                }
+            }
+
+            false
         }
     }
 
