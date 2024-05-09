@@ -41,7 +41,7 @@ async fn main() {
 
     tokio::spawn(main_game_loop(receiver));
     tokio::spawn(async move {
-        let tick_rate = Duration::from_secs_f64(1.0 / 30.0); // 120 fps
+        let tick_rate = Duration::from_secs_f64(1.0 / 60.0);
         let mut last_tick = Instant::now();
         
         loop {

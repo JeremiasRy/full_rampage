@@ -25,11 +25,14 @@ message PlayerResponse {
     Point position = 1;
     Point cannon_position = 2;
     bool dead = 3;
+    int32 id = 4;
 }
 
 message CannonEventResponse {
     Point position = 1;
     int32 size = 2;
+    int32 from_id = 3;
+    int32 id = 4;
 }
 
 message ServerOutput {

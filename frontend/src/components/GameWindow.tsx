@@ -9,12 +9,7 @@ function GameWindow(props: { serverOutput: ServerOutput }) {
     <Stage width={1200} height={800}>
       {players.map((player) => (
         <RampageVehicle
-          key={
-            player.cannonPosition.x +
-            player.cannonPosition.y +
-            player.position.x +
-            player.position.y
-          }
+          key={player.id}
           x={player.position.x}
           y={player.position.y}
           cannonX={player.cannonPosition.x}
@@ -23,10 +18,20 @@ function GameWindow(props: { serverOutput: ServerOutput }) {
         />
       ))}
       {shots.map((shot) => (
-        <Shot x={shot.position.x} y={shot.position.y} size={shot.size} />
+        <Shot
+          key={shot.id}
+          x={shot.position.x}
+          y={shot.position.y}
+          size={shot.size}
+        />
       ))}
       {explosions.map((shot) => (
-        <Shot x={shot.position.x} y={shot.position.y} size={shot.size} />
+        <Shot
+          key={shot.id}
+          x={shot.position.x}
+          y={shot.position.y}
+          size={shot.size}
+        />
       ))}
     </Stage>
   );

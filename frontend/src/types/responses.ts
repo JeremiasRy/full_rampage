@@ -10,6 +10,7 @@ export type PlayerId = {
 };
 
 export type PlayerResponse = {
+  id: number;
   position: Position;
   cannonPosition: Position;
   dead: boolean;
@@ -17,6 +18,8 @@ export type PlayerResponse = {
 export type CannonEventResponse = {
   position: Position;
   size: number;
+  fromId: number;
+  id: number;
 };
 export type Position = {
   x: number;

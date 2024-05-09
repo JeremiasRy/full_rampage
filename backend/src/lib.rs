@@ -12,6 +12,7 @@ pub mod gamelogic {
     const MAX_CANNON_SHOT_LENGTH: i32 = 300;
     const BOUNDS_HEIGHT: i32 = 800;
     const BOUNDS_WIDTH: i32 = 1200;
+    const PLAYER_MASS: f32 = 1.0; // just to keep things simple, mass could be added to players for more interesting players.
 
     type InputRequest = crate::InputRequest;
 
@@ -263,10 +264,6 @@ pub mod gamelogic {
         pub fn input(&mut self, input:i32) {
             self.input = input
         }
-        pub fn reverse_forces(&mut self) {
-            self.reverse_delta_y();
-            self.reverse_delta_x();
-        }
 
         fn reverse_delta_y(&mut self) {
             if self.delta_y < 0.0 {
@@ -393,7 +390,7 @@ pub mod gamelogic {
         players: HashMap<i32, Player>,
         cannon_shots: HashMap<i32, CannonShot>,
         explosions: HashMap<i32, Explosion>,
-        internal_id_count: i32
+        internal_id_count: i32,
     }
 
     impl GameController {
@@ -412,7 +409,6 @@ pub mod gamelogic {
             let mut cannon_shot_ids_marked_for_remove = Vec::with_capacity(self.cannon_shots.len());
             let mut explosions_marked_for_remove = Vec::with_capacity(self.explosions.len());
 
-            println!("We have {} collisions in tick", self.handle_collisions.len());
             while let Some(player_id_pair) = self.handle_collisions.pop_front() {
                 let player_ids = vec![player_id_pair.0, player_id_pair.1];
                 let mut players: Vec<&mut Player> = self.players
@@ -479,7 +475,7 @@ pub mod gamelogic {
         pub fn add_player(&mut self, id:i32) {
             self.players.insert(id,Player::new(id, self.height, self.width));
         }
-        pub fn drop_player(&mut self, player_id: i32) {
+        pub fn drop_player(&mut self, player_id: i32) {;
             self.players.remove_entry(&player_id);
         }
         pub fn output(&mut self) -> ServerOutput {
@@ -492,22 +488,27 @@ pub mod gamelogic {
                 player_response.set_position(player.position.to_buffer_point());
                 player_response.set_cannon_position(player.get_cannon_position().to_buffer_point());
                 player_response.set_dead(player.status == PlayerStatus::Dead);
-                player_response_vec.push(player_response)
+                player_response.set_id(player.id);
+                player_response_vec.push(player_response);
             }
 
-            for explosion in self.explosions.values() {
+            for (id, explosion) in self.explosions.iter() {
                 let mut explosion_response = CannonEventResponse::new();
 
                 explosion_response.set_position(explosion.position.to_buffer_point());
                 explosion_response.set_size(explosion.size);
+                explosion_response.set_from_id(explosion.from_player_id);
+                explosion_response.set_id(*id);
                 exlosion_response_vec.push(explosion_response);
             }
 
-            for cannon_shot in self.cannon_shots.values() {
+            for (id, cannon_shot) in self.cannon_shots.iter() {
                 if let Some(position) = cannon_shot.position {
                     let mut cannon_shot_response = CannonEventResponse::new();
                     cannon_shot_response.set_position(position.to_buffer_point());
                     cannon_shot_response.set_size(cannon_shot.count_size());
+                    cannon_shot_response.set_from_id(cannon_shot.from_player_id);
+                    cannon_shot_response.set_id(*id);
 
                     cannon_shot_response_vec.push(cannon_shot_response);
                 } 
@@ -536,8 +537,19 @@ pub mod gamelogic {
             }
         }
         fn handle_collision(first: &mut Player, second: &mut Player) {
-            first.reverse_forces();
-            second.reverse_forces();
+            let first_calculated_x = GameController::elastic_collision(first.delta_x, second.delta_x);
+            let first_calculated_y = GameController::elastic_collision(first.delta_y, second.delta_y);
+            let second_calculated_x = GameController::elastic_collision(second.delta_x, first.delta_x);
+            let second_calculated_y = GameController::elastic_collision(second.delta_y, first.delta_y);
+
+            first.delta_x = first_calculated_x;
+            first.delta_y = first_calculated_y;
+            second.delta_x = second_calculated_x;
+            second.delta_y = second_calculated_y;
+        }
+
+        fn elastic_collision(delta_1: f32, delta_2: f32) -> f32 {
+            (delta_1 * (PLAYER_MASS - PLAYER_MASS) + 2.0 * PLAYER_MASS * delta_2) / PLAYER_MASS + PLAYER_MASS
         }
     }
 }

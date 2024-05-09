@@ -119,6 +119,7 @@ function App() {
         if (arrayBuffer && typeof arrayBuffer !== "string") {
           const uintArr = new Uint8Array(arrayBuffer);
           const messageFlag = uintArr[1];
+
           if (messageFlag === 2) {
             const { playerId } = {
               ...(protoRoot
@@ -131,6 +132,7 @@ function App() {
             setId(playerId);
             return;
           }
+
           if (messageFlag === 1) {
             const { players, shots, explosions } = {
               ...(protoRoot
@@ -142,6 +144,7 @@ function App() {
                 explosions: CannonEventResponse[];
               }),
             };
+
             setServerOutput({
               players,
               shots,
