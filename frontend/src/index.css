@@ -12,3 +12,21 @@
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
+
+.main-wrapper {
+  display: flex;
+  flex-direction: row;
+}
+
+.lobby-wrapper {
+  padding-left: 5em;
+  display: flex;
+  flex-direction: column;
+}
+
+.lobby-wrapper__lobby-item {
+  padding: 0.5em;
+  display: flex;
+  flex-direction: column;
+  border-bottom: 1px rgba(255, 255, 255, 0.87) solid;
+}

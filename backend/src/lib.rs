@@ -1,7 +1,7 @@
 include!(concat!(env!("OUT_DIR"), "/messages.rs"));
 
 pub mod gamelogic {
-    use crate::{CannonEventResponse, PlayerResponse, PlayerStatus, Point, ServerOutput};
+    use crate::{CannonEventResponse, ClientInfo, ClientLobbyStatus, ClientStatus, InputRequest, MessageType, PlayerInGameResponse, PlayerInGameStatus, Point, ServerGameFrameResponse, ServerLobbyResponse};
     use std::collections::VecDeque;
     use std::collections::hash_map::HashMap;
     use protobuf::RepeatedField;
@@ -12,9 +12,7 @@ pub mod gamelogic {
     const MAX_CANNON_SHOT_LENGTH: i32 = 300;
     const BOUNDS_HEIGHT: i32 = 800;
     const BOUNDS_WIDTH: i32 = 1200;
-    const PLAYER_MASS: f32 = 1.0; // just to keep things simple, mass could be added to players for more interesting players.
-
-    type InputRequest = crate::InputRequest;
+    const PLAYER_MASS: f32 = 1.0; // just to keep things simple, mass could be added to players for more interesting players
 
     enum PlayerInput {
         NoInput,
@@ -230,7 +228,7 @@ pub mod gamelogic {
         delta_y: f32,
         delta_a: f32,
         cooldown: i32,
-        status: PlayerStatus
+        player_in_game_status: PlayerInGameStatus,
     }
 
     impl Player {
@@ -247,11 +245,11 @@ pub mod gamelogic {
                 cannon_shot: None,
                 power_loaded: 0,
                 cooldown: 120,
-                status: PlayerStatus::respawning
+                player_in_game_status: PlayerInGameStatus::respawning
             }
         }
         pub fn die(&mut self) {
-            self.status = PlayerStatus::dead;
+            self.player_in_game_status = PlayerInGameStatus::dead;
             self.cooldown = 120;
         }
         pub fn tick(&mut self) {
@@ -261,15 +259,15 @@ pub mod gamelogic {
 
                 if self.cooldown == 0 {
 
-                    if self.status == PlayerStatus::dead {
-                        self.status = PlayerStatus::respawning;
+                    if self.player_in_game_status == PlayerInGameStatus::dead {
+                        self.player_in_game_status = PlayerInGameStatus::respawning;
                         self.position = ControllerPoint::random_point(BOUNDS_HEIGHT - PLAYER_SIZE as i32, BOUNDS_WIDTH - PLAYER_SIZE as i32);
                         self.cooldown += 120;
                         return;
                     } 
 
-                    if self.status == PlayerStatus::respawning {
-                        self.status = PlayerStatus::alive;
+                    if self.player_in_game_status == PlayerInGameStatus::respawning {
+                        self.player_in_game_status = PlayerInGameStatus::alive;
                         return;
                     }
                 }
@@ -321,6 +319,7 @@ pub mod gamelogic {
 
         fn translate(&mut self) {
             let mut new_angle = (self.cannon_angle + self.delta_a) % 359.0;
+            println!("angle: {}, delta: {}", new_angle, self.delta_a);
 
             if new_angle < 0.0 {
                 new_angle += 360.0;
@@ -369,14 +368,13 @@ pub mod gamelogic {
         }
 
         fn check_angle(&mut self) {
-            let is_at_top_speed = Player::is_at_top_speed(self.delta_a);
-            if self.input.contains(PlayerInput::AimPositive) && !is_at_top_speed {
+            if self.input.contains(PlayerInput::AimPositive) {
                 self.delta_a += 1.0;
             } else if self.delta_a > 0.0 {
                 self.delta_a = 0.0;
             }
 
-            if self.input.contains(PlayerInput::AimNegative) && !is_at_top_speed {
+            if self.input.contains(PlayerInput::AimNegative) {
                 self.delta_a -= 1.0;
             } else if self.delta_a < 0.0 {
                 self.delta_a = 0.0;
@@ -421,27 +419,76 @@ pub mod gamelogic {
         }
     }
 
+    enum ControllerStatus {
+        Play,
+        Stop
+    }
+    struct Client {
+        status: ClientStatus,
+        lobby_status: ClientLobbyStatus
+    }
+
+    impl Client {
+        pub fn new() -> Self {
+            Client {
+                status: ClientStatus::lobby,
+                lobby_status: ClientLobbyStatus::waiting_confirmation,
+            }
+        }
+        pub fn ready(&mut self) { 
+            self.lobby_status = ClientLobbyStatus::ready
+        }
+        pub fn go_to_war(&mut self) {
+            if self.lobby_status == ClientLobbyStatus::waiting_confirmation {
+                return;
+            }
+
+            self.status = ClientStatus::in_game;
+        }
+    }
+
     pub struct GameController {
         height: i32,
         width: i32,
         handle_collisions: VecDeque<(i32, i32)>,
+        clients: HashMap<i32, Client>,
         players: HashMap<i32, Player>,
         cannon_shots: HashMap<i32, CannonShot>,
         explosions: HashMap<i32, Explosion>,
         internal_id_count: i32,
+        status: ControllerStatus,
     }
 
-    impl GameController {
+    impl  GameController {
         pub fn new() -> GameController {
             GameController {
+                status: ControllerStatus::Stop,
                 internal_id_count: 0,
                 height: BOUNDS_HEIGHT,
                 width: BOUNDS_WIDTH,
-                players: HashMap::<i32, Player>::new(),
-                cannon_shots: HashMap::<i32, CannonShot>::new(),
-                explosions: HashMap::<i32, Explosion>::new(),
+                clients: HashMap::new(),
+                players: HashMap::new(),
+                cannon_shots: HashMap::new(),
+                explosions: HashMap::new(),
                 handle_collisions: VecDeque::<(i32, i32)>::new(),
             }
+        }
+        pub fn set_client_ready_for_war(&mut self, id:i32) {
+            if let Some(client) = self.clients.get_mut(&id) {
+                client.ready()
+            }
+        }
+        pub fn start(&mut self) {
+            for (id, client) in self.clients.iter_mut().filter(|(_, client)| client.lobby_status == ClientLobbyStatus::ready) {
+                self.players.insert(*id, Player::new(*id, self.height, self.width));
+                client.go_to_war();
+            }
+            self.status = ControllerStatus::Play;
+        }
+        pub fn stop(&mut self) {
+            self.status = ControllerStatus::Stop;
+            self.players.clear();
+            self.clients.iter_mut().for_each(|(_, client)| client.status = ClientStatus::lobby)
         }
         pub fn tick(&mut self) {
             let mut cannon_shot_ids_marked_for_remove = Vec::with_capacity(self.cannon_shots.len());
@@ -510,23 +557,37 @@ pub mod gamelogic {
                 player.input(input.get_input());
             };
         }
-        pub fn add_player(&mut self, id:i32) {
-            self.players.insert(id,Player::new(id, self.height, self.width));
+        pub fn add_client(&mut self, id: i32) {
+            self.clients.insert(id, Client::new());
         }
-        pub fn drop_player(&mut self, player_id: i32) {;
-            self.players.remove_entry(&player_id);
+        pub fn drop_client(&mut self, client_id: i32) {
+            self.clients.remove_entry(&client_id);
         }
-        pub fn output(&mut self) -> ServerOutput {
-            let mut player_response_vec: Vec<PlayerResponse> = Vec::<PlayerResponse>::new();
+        pub fn lobby_output(&mut self) -> ServerLobbyResponse {
+            let mut lobby_response = ServerLobbyResponse::new();
+            let clients_in_lobby = self.clients.iter_mut().map(|(id, client)| {
+                let mut client_info = ClientInfo::new();
+                client_info.set_id(*id);
+                client_info.set_status(client.status);
+                client_info.set_lobby_status(client.lobby_status);
+                client_info
+            }).collect();
+
+            lobby_response.set_clients(RepeatedField::from_vec(clients_in_lobby));
+            lobby_response.set_field_type(MessageType::lobby_message);
+            lobby_response
+        }
+        pub fn in_game_output(&mut self) -> ServerGameFrameResponse {
+            let mut player_response_vec: Vec<PlayerInGameResponse> = Vec::<PlayerInGameResponse>::new();
             let mut cannon_shot_response_vec = Vec::<CannonEventResponse>::new();
             let mut exlosion_response_vec = Vec::<CannonEventResponse>::new();
 
             for player in self.players.values() {
-                let mut player_response = PlayerResponse::new();
+                let mut player_response = PlayerInGameResponse::new();
                 player_response.set_position(player.position.to_buffer_point());
                 player_response.set_cannon_position(player.get_cannon_position().to_buffer_point());
                 player_response.set_id(player.id);
-                player_response.set_status(player.status);
+                player_response.set_in_game_status(player.player_in_game_status);
                 player_response_vec.push(player_response);
             }
 
@@ -552,7 +613,7 @@ pub mod gamelogic {
                 } 
             }
 
-            let mut server_output = ServerOutput::new();
+            let mut server_output = ServerGameFrameResponse::new();
             let players = RepeatedField::from_vec(player_response_vec);
             let cannon_shots = RepeatedField::from_vec(cannon_shot_response_vec);
             let explosions = RepeatedField::from_vec(exlosion_response_vec);

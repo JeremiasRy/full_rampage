@@ -1,15 +1,36 @@
 syntax = "proto3";
 
 enum MessageType {
-    normal = 0;
-    frame = 1;
-    id_response = 2;
+    empty_1 = 0;
+    normal = 1;
+    frame = 2;
+    id_response = 3;
+    lobby_message = 4;
 }
 
-enum PlayerStatus {
-    alive = 0;
-    dead = 1;
-    respawning = 2;
+enum PlayerInGameStatus {
+    empty_2 = 0;
+    alive = 1;
+    dead = 2;
+    respawning = 3;
+}
+
+enum ClientStatus {
+    empty_3 = 0;
+    lobby = 1;
+    in_game = 2;
+}
+
+enum ClientLobbyStatus {
+    empty_4 = 0;
+    waiting_confirmation = 1;
+    ready = 2;
+}
+
+enum ClientRequestType {
+    empty_5 = 0;
+    in_game_input = 1;
+    lobby_input = 2;
 }
 
 message PlayerId {
@@ -23,15 +44,24 @@ message Point {
 }
 
 message InputRequest {
-    int32 player_id = 1;
-    int32 input = 2;
+    ClientRequestType type = 1;
+    int32 player_id = 2;
+    int32 input = 3;
+    ClientLobbyStatus status = 4;
 }
 
-message PlayerResponse {
+message ClientInfo {
+    int32 id = 1;
+    ClientLobbyStatus lobby_status = 2;
+    ClientStatus status = 3;
+}
+
+message PlayerInGameResponse {
     Point position = 1;
     Point cannon_position = 2;
-    PlayerStatus status = 3;
+    PlayerInGameStatus in_game_status = 3;
     int32 id = 4;
+    int32 score = 5;
 }
 
 message CannonEventResponse {
@@ -41,9 +71,14 @@ message CannonEventResponse {
     int32 id = 4;
 }
 
-message ServerOutput {
+message ServerLobbyResponse {
     MessageType type = 1;
-    repeated PlayerResponse players = 2;
+    repeated ClientInfo clients = 2;
+}
+
+message ServerGameFrameResponse {
+    MessageType type = 1;
+    repeated PlayerInGameResponse players = 2;
     repeated CannonEventResponse shots = 3;
     repeated CannonEventResponse explosions = 4;
 }

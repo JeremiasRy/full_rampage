@@ -6,21 +6,52 @@ import isEqual from "lodash/isEqual";
 import proto from "protobufjs";
 import {
   PlayerResponse,
-  ServerOutput,
+  InGameOutput,
   CannonEventResponse,
+  LobbyMessage,
+  MessageType,
+  PlayerId,
+  ClientLobbyStatus,
+  RequestType,
 } from "./types/responses";
+import Lobby from "./components/Lobby";
 
 function App() {
   const [keysDown, setKeysDown] = useState<Set<number>>(new Set());
   const [sentInputs, setSentInputs] = useState<number[]>([]);
   const [id, setId] = useState(0);
-  const [serverOutput, setServerOutput] = useState<ServerOutput>({
+  const [inGameOutput, setInGameOutput] = useState<InGameOutput>({
+    type: MessageType.Frame,
     players: [],
     shots: [],
     explosions: [],
   });
+  const [lobby, setLobby] = useState<LobbyMessage>({
+    type: MessageType.LobbyMessage,
+    clients: [],
+  });
   const connection = useRef<WebSocket | null>(null);
   const protoRootRef = useRef<proto.Root>();
+
+  function sendLobbyStatusRequest() {
+    if (!connection.current || !protoRootRef.current) {
+      return;
+    }
+    const payload = {
+      type: RequestType.LobbyInput,
+      playerId: id,
+      input: 0,
+      status: ClientLobbyStatus.Ready,
+    };
+
+    const message = protoRootRef.current
+      .lookupType("InputRequest")
+      .encode(payload)
+      .finish();
+
+    console.log(payload);
+    connection.current.send(message);
+  }
 
   function handleKeyDown(event: KeyboardEvent) {
     event.preventDefault();
@@ -74,6 +105,7 @@ function App() {
       return;
     }
     const payload = {
+      type: RequestType.InGameInput,
       playerId: id,
       input: keysArray.reduce((a, b) => a + b, 0),
     };
@@ -120,36 +152,32 @@ function App() {
           const uintArr = new Uint8Array(arrayBuffer);
           const messageFlag = uintArr[1];
 
-          if (messageFlag === 2) {
-            const { playerId } = {
-              ...(protoRoot
-                .lookupType("PlayerId")
-                .decode(uintArr) as unknown as {
-                playerId: number;
-                type: number;
-              }),
-            };
+          if (messageFlag === MessageType.IdResponse) {
+            const { playerId } = protoRoot
+              .lookupType("PlayerId")
+              .decode(uintArr) as unknown as PlayerId;
+
             setId(playerId);
             return;
           }
 
-          if (messageFlag === 1) {
-            const { players, shots, explosions } = {
+          if (messageFlag === MessageType.Frame) {
+            const frame = {
               ...(protoRoot
-                .lookupType("ServerOutput")
-                .decode(uintArr) as unknown as {
-                type: number;
-                players: PlayerResponse[];
-                shots: CannonEventResponse[];
-                explosions: CannonEventResponse[];
-              }),
+                .lookupType("ServerGameFrameResponse")
+                .decode(uintArr) as unknown as InGameOutput),
             };
 
-            setServerOutput({
-              players,
-              shots,
-              explosions,
-            });
+            setInGameOutput(frame);
+            return;
+          }
+
+          if (messageFlag === MessageType.LobbyMessage) {
+            const lobby = protoRoot
+              .lookupType("ServerLobbyResponse")
+              .decode(uintArr) as unknown as LobbyMessage;
+
+            setLobby(lobby);
           }
         }
       };
@@ -169,7 +197,16 @@ function App() {
     };
   }, []);
 
-  return <GameWindow serverOutput={serverOutput} />;
+  return (
+    <div className="main-wrapper">
+      <GameWindow serverOutput={inGameOutput} />
+      <Lobby
+        currentClientId={id}
+        clients={lobby.clients}
+        onAction={sendLobbyStatusRequest}
+      />
+    </div>
+  );
 }
 
 export default App;

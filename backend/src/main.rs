@@ -10,8 +10,7 @@ use tokio::sync::mpsc::Receiver;
 use tokio::time::Instant;
 use tokio_tungstenite::{accept_async, WebSocketStream};
 use backend::gamelogic::GameController;
-use backend::{MessageType, ServerOutput};
-use backend::InputRequest;
+use backend::{ClientLobbyStatus, ClientRequestType, InputRequest, MessageType};
 use backend::PlayerId;
 
 type TokioMessage = tokio_tungstenite::tungstenite::Message;
@@ -22,7 +21,8 @@ struct NewPlayerConnection {
 }
 enum TxMessage  {
     SuccessfulConnection(NewPlayerConnection),
-    PlayerInput(InputRequest),
+    PlayerInGameInput(InputRequest),
+    PlayerInLobbyInput(InputRequest),
     Disconnect(i32),
     Tick
 }
@@ -67,8 +67,15 @@ async fn main_game_loop(mut receiver: Receiver<TxMessage>) {
 
     while let Some(msg) = receiver.recv().await {
         match msg {
+            TxMessage::PlayerInLobbyInput(input) => {
+                println!("Lobby input!");
+                if input.get_status() == ClientLobbyStatus::ready {
+                    game_controller.set_client_ready_for_war(input.player_id)
+                }
+                send_output_to_all_clients(connection_pool.values_mut(), game_controller.lobby_output()).await;
+            },
             TxMessage::SuccessfulConnection(mut new_connection) => {
-                game_controller.add_player(new_connection.id);
+                game_controller.add_client(new_connection.id);
 
                 let mut new_player_message = PlayerId::new();
                 new_player_message.set_field_type(MessageType::id_response);
@@ -78,28 +85,29 @@ async fn main_game_loop(mut receiver: Receiver<TxMessage>) {
                 let _ = new_connection.sink.send(TokioMessage::binary(bytes)).await;
 
                 connection_pool.insert(new_connection.id, new_connection.sink);
-                send_output_to_all_clients(connection_pool.values_mut(), game_controller.output()).await;
+                send_output_to_all_clients(connection_pool.values_mut(), game_controller.lobby_output()).await;
             },
-            TxMessage::PlayerInput(input_request) => {
+            TxMessage::PlayerInGameInput(input_request) => {
                 game_controller.player_input(input_request);
             },
             TxMessage::Disconnect(player_id) => {
-                game_controller.drop_player(player_id);
+                game_controller.drop_client(player_id);
                 connection_pool.remove_entry(&player_id);
-                send_output_to_all_clients(connection_pool.values_mut(), game_controller.output()).await;
+                send_output_to_all_clients(connection_pool.values_mut(), game_controller.in_game_output()).await;
+                send_output_to_all_clients(connection_pool.values_mut(), game_controller.lobby_output()).await;
                 println!("Connection dropped!") // TODO logging
             }, 
             TxMessage::Tick => {
                 if game_controller.should_tick() {
                     game_controller.tick();
-                    send_output_to_all_clients(connection_pool.values_mut(), game_controller.output()).await;
+                    send_output_to_all_clients(connection_pool.values_mut(), game_controller.in_game_output()).await;
                 }
             }   
         }
     }
 }    
 
-async fn send_output_to_all_clients(connections: ValuesMut<'_, i32, SplitSink<WebSocketStream<TcpStream>, TokioMessage>>, output: ServerOutput) {
+async fn send_output_to_all_clients<T : protobuf::Message>(connections: ValuesMut<'_, i32, SplitSink<WebSocketStream<TcpStream>, TokioMessage>>, output: T) {
     for write in connections {
         let _ = write.send(tokio_tungstenite::tungstenite::Message::binary(output.write_to_bytes().unwrap())).await;
     };
@@ -122,8 +130,20 @@ async fn player_connection(stream: TcpStream, sender: Sender<TxMessage>, player_
 
             while let Some(Ok(msg)) = read.next().await {
                 if msg.is_binary() {
-                    let input_request:InputRequest = InputRequest::parse_from_bytes(&msg.into_data()).unwrap();
-                    let _ = sender.send(TxMessage::PlayerInput(input_request)).await;
+
+                    let input_request = InputRequest::parse_from_bytes(&msg.into_data()).unwrap();
+                    println!("Input request: {:?}", input_request);
+                    match input_request.field_type {
+                        ClientRequestType::in_game_input => {
+                            let _ = sender.send(TxMessage::PlayerInGameInput(input_request)).await;
+                        },
+                        ClientRequestType::lobby_input => {
+                            let _ = sender.send(TxMessage::PlayerInLobbyInput(input_request)).await;
+                        },
+                        ClientRequestType::empty_5 => {
+                            // Shouldn't happen if it does lets do some logging
+                        }
+                    }
                 }
             }
             let _ = sender.send(TxMessage::Disconnect(player_id)).await;
