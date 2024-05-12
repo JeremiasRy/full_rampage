@@ -23,8 +23,15 @@ enum ClientStatus {
 
 enum ClientLobbyStatus {
     empty_4 = 0;
-    waiting_confirmation = 1;
+    waiting = 1;
     ready = 2;
+}
+
+enum GameControllerStatus {
+    empty_6 = 0;
+    countdown = 1;
+    playing = 2;
+    stopped = 3;
 }
 
 enum ClientRequestType {
@@ -74,6 +81,7 @@ message CannonEventResponse {
 message ServerLobbyResponse {
     MessageType type = 1;
     repeated ClientInfo clients = 2;
+    GameControllerStatus gameStatus = 3;
 }
 
 message ServerGameFrameResponse {

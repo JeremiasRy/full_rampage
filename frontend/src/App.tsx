@@ -13,6 +13,7 @@ import {
   PlayerId,
   ClientLobbyStatus,
   RequestType,
+  GameControllerStatus,
 } from "./types/responses";
 import Lobby from "./components/Lobby";
 
@@ -27,6 +28,7 @@ function App() {
     explosions: [],
   });
   const [lobby, setLobby] = useState<LobbyMessage>({
+    gameStatus: GameControllerStatus.Stopped,
     type: MessageType.LobbyMessage,
     clients: [],
   });
@@ -49,7 +51,6 @@ function App() {
       .encode(payload)
       .finish();
 
-    console.log(payload);
     connection.current.send(message);
   }
 
@@ -167,7 +168,6 @@ function App() {
                 .lookupType("ServerGameFrameResponse")
                 .decode(uintArr) as unknown as InGameOutput),
             };
-
             setInGameOutput(frame);
             return;
           }
@@ -201,6 +201,7 @@ function App() {
     <div className="main-wrapper">
       <GameWindow serverOutput={inGameOutput} />
       <Lobby
+        gameStatus={lobby.gameStatus}
         currentClientId={id}
         clients={lobby.clients}
         onAction={sendLobbyStatusRequest}

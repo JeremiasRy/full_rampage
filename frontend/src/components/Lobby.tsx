@@ -1,21 +1,27 @@
-import { Client, ClientLobbyStatus } from "../types/responses";
+import {
+  Client,
+  ClientLobbyStatus,
+  GameControllerStatus,
+} from "../types/responses";
 
 export interface LobbyProps {
+  gameStatus: GameControllerStatus;
   currentClientId: number;
   clients: Client[];
   onAction: () => void;
 }
 
 export default function Lobby(props: LobbyProps) {
-  const { clients, currentClientId, onAction } = { ...props };
+  const { clients, currentClientId, gameStatus, onAction } = { ...props };
   return (
     <div className="lobby-wrapper">
       <h1>Lobby!</h1>
-      {clients.map((client) => (
-        <div className="lobby-wrapper__lobby-item" key={client.id}>
-          Player: {client.id} | {ClientLobbyStatus[client.lobbyStatus]}
-          {currentClientId === client.id &&
-            client.lobbyStatus == ClientLobbyStatus.WaitingConfirmation && (
+      {clients.map(({ id, lobbyStatus }) => (
+        <div className="lobby-wrapper__lobby-item" key={id}>
+          Player: {id} | {ClientLobbyStatus[lobbyStatus]}
+          {currentClientId === id &&
+            lobbyStatus === ClientLobbyStatus.Waiting &&
+            gameStatus === GameControllerStatus.Stopped && (
               <button onClick={onAction}>Ready?</button>
             )}
         </div>

@@ -7,6 +7,7 @@ export type InGameOutput = {
 
 export type LobbyMessage = {
   type: MessageType;
+  gameStatus: GameControllerStatus;
   clients: Client[];
 };
 
@@ -24,7 +25,7 @@ export type PlayerResponse = {
   id: number;
   position: Position;
   cannonPosition: Position;
-  status: number;
+  inGameStatus: InGameStatus;
 };
 
 export type CannonEventResponse = {
@@ -39,6 +40,12 @@ export type Position = {
   y: number;
 };
 
+export enum InGameStatus {
+  Alive = 1,
+  Dead = 2,
+  Respawning = 3,
+}
+
 export enum MessageType {
   Normal = 1,
   Frame = 2,
@@ -52,11 +59,17 @@ export enum ClientStatus {
 }
 
 export enum ClientLobbyStatus {
-  WaitingConfirmation = 1,
+  Waiting = 1,
   Ready = 2,
 }
 
 export enum RequestType {
   InGameInput = 1,
   LobbyInput = 2,
+}
+
+export enum GameControllerStatus {
+  Countdown = 1,
+  Playing = 2,
+  Stopped = 3,
 }

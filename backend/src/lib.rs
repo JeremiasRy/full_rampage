@@ -1,7 +1,7 @@
 include!(concat!(env!("OUT_DIR"), "/messages.rs"));
 
 pub mod gamelogic {
-    use crate::{CannonEventResponse, ClientInfo, ClientLobbyStatus, ClientStatus, InputRequest, MessageType, PlayerInGameResponse, PlayerInGameStatus, Point, ServerGameFrameResponse, ServerLobbyResponse};
+    use crate::{CannonEventResponse, ClientInfo, ClientLobbyStatus, ClientStatus, GameControllerStatus, InputRequest, MessageType, PlayerInGameResponse, PlayerInGameStatus, Point, ServerGameFrameResponse, ServerLobbyResponse};
     use std::collections::VecDeque;
     use std::collections::hash_map::HashMap;
     use protobuf::RepeatedField;
@@ -244,7 +244,7 @@ pub mod gamelogic {
                 is_loading_cannon: false,
                 cannon_shot: None,
                 power_loaded: 0,
-                cooldown: 120,
+                cooldown: 1,
                 player_in_game_status: PlayerInGameStatus::respawning
             }
         }
@@ -419,10 +419,6 @@ pub mod gamelogic {
         }
     }
 
-    enum ControllerStatus {
-        Play,
-        Stop
-    }
     struct Client {
         status: ClientStatus,
         lobby_status: ClientLobbyStatus
@@ -432,14 +428,14 @@ pub mod gamelogic {
         pub fn new() -> Self {
             Client {
                 status: ClientStatus::lobby,
-                lobby_status: ClientLobbyStatus::waiting_confirmation,
+                lobby_status: ClientLobbyStatus::waiting,
             }
         }
-        pub fn ready(&mut self) { 
+        pub fn set_ready(&mut self) { 
             self.lobby_status = ClientLobbyStatus::ready
         }
         pub fn go_to_war(&mut self) {
-            if self.lobby_status == ClientLobbyStatus::waiting_confirmation {
+            if self.lobby_status == ClientLobbyStatus::waiting {
                 return;
             }
 
@@ -456,13 +452,15 @@ pub mod gamelogic {
         cannon_shots: HashMap<i32, CannonShot>,
         explosions: HashMap<i32, Explosion>,
         internal_id_count: i32,
-        status: ControllerStatus,
+        status: GameControllerStatus,
+        countdown: i32,
     }
 
     impl  GameController {
         pub fn new() -> GameController {
             GameController {
-                status: ControllerStatus::Stop,
+                status: GameControllerStatus::stopped,
+                countdown: 0,
                 internal_id_count: 0,
                 height: BOUNDS_HEIGHT,
                 width: BOUNDS_WIDTH,
@@ -473,24 +471,43 @@ pub mod gamelogic {
                 handle_collisions: VecDeque::<(i32, i32)>::new(),
             }
         }
+        pub fn clients_ready(&self) -> bool {
+            self.clients.iter().all(|(_, client)| client.lobby_status == ClientLobbyStatus::ready)
+        }
         pub fn set_client_ready_for_war(&mut self, id:i32) {
             if let Some(client) = self.clients.get_mut(&id) {
-                client.ready()
+                client.set_ready()
             }
         }
-        pub fn start(&mut self) {
+        pub fn start_countdown(&mut self) {
             for (id, client) in self.clients.iter_mut().filter(|(_, client)| client.lobby_status == ClientLobbyStatus::ready) {
                 self.players.insert(*id, Player::new(*id, self.height, self.width));
                 client.go_to_war();
             }
-            self.status = ControllerStatus::Play;
+            self.status = GameControllerStatus::countdown;
+            self.countdown = 240;
+        }
+        pub fn start(&mut self) {
+            if self.status != GameControllerStatus::countdown {
+                return;
+            }
+            self.status = GameControllerStatus::playing;
         }
         pub fn stop(&mut self) {
-            self.status = ControllerStatus::Stop;
+            self.status = GameControllerStatus::stopped;
             self.players.clear();
             self.clients.iter_mut().for_each(|(_, client)| client.status = ClientStatus::lobby)
         }
         pub fn tick(&mut self) {
+
+            if self.status == GameControllerStatus::countdown {
+                self.countdown -= 1;
+                if self.countdown <= 0 {
+                    self.status = GameControllerStatus::playing;
+                }
+                return;
+            }
+
             let mut cannon_shot_ids_marked_for_remove = Vec::with_capacity(self.cannon_shots.len());
             let mut explosions_marked_for_remove = Vec::with_capacity(self.explosions.len());
 
@@ -550,7 +567,7 @@ pub mod gamelogic {
             }
         }
         pub fn should_tick(&self) -> bool {
-            self.cannon_shots.len() > 0 || self.players.iter().any(|(_, player)| player.should_tick()) || !self.explosions.is_empty()
+            self.status == GameControllerStatus::countdown || self.cannon_shots.len() > 0 || self.players.iter().any(|(_, player)| player.should_tick()) || !self.explosions.is_empty()
         }
         pub fn player_input(&mut self, input: InputRequest) {
             if let Some(player) = self.players.get_mut(&input.get_player_id()) {
@@ -574,6 +591,7 @@ pub mod gamelogic {
             }).collect();
 
             lobby_response.set_clients(RepeatedField::from_vec(clients_in_lobby));
+            lobby_response.set_gameStatus(self.status);
             lobby_response.set_field_type(MessageType::lobby_message);
             lobby_response
         }

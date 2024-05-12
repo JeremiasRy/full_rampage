@@ -14,7 +14,7 @@ function GameWindow(props: { serverOutput: InGameOutput }) {
           y={player.position.y}
           cannonX={player.cannonPosition.x}
           cannonY={player.cannonPosition.y}
-          status={player.status}
+          status={player.inGameStatus}
         />
       ))}
       {shots.map((shot) => (

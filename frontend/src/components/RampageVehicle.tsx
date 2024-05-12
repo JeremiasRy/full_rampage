@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Graphics as GraphicsComponent } from "@pixi/react";
 import { Graphics } from "@pixi/graphics";
+import { InGameStatus } from "../types/responses";
 
 export interface RampageVehicleProps {
   x: number;
@@ -22,7 +23,7 @@ function DrawRampageVehicle(props: RampageVehicleProps) {
   }, [props.x, props.y, props.cannonX, props.cannonY, props.status]);
 
   useEffect(() => {
-    if (props.status == 1) {
+    if (props.status === InGameStatus.Dead) {
       const intervalId = setInterval(() => {
         setFlickerColor((prev) => (prev === 0x0 ? 0xff3300 : 0x0));
         setCannonFlickerColor((prev) => (prev === 0x0 ? 0xffffff : 0x0));
@@ -31,7 +32,7 @@ function DrawRampageVehicle(props: RampageVehicleProps) {
       return () => {
         clearInterval(intervalId);
       };
-    } else if (props.status == 2) {
+    } else if (props.status === InGameStatus.Respawning) {
       const intervalId = setInterval(() => {
         setFlickerColor((prev) => (prev === 0x0 ? 0xff3300 : 0x0));
         setCannonFlickerColor((prev) => (prev === 0x0 ? 0xffffff : 0x0));

@@ -68,11 +68,14 @@ async fn main_game_loop(mut receiver: Receiver<TxMessage>) {
     while let Some(msg) = receiver.recv().await {
         match msg {
             TxMessage::PlayerInLobbyInput(input) => {
-                println!("Lobby input!");
                 if input.get_status() == ClientLobbyStatus::ready {
                     game_controller.set_client_ready_for_war(input.player_id)
                 }
                 send_output_to_all_clients(connection_pool.values_mut(), game_controller.lobby_output()).await;
+                if game_controller.clients_ready() {
+                    game_controller.start_countdown();
+                    send_output_to_all_clients(connection_pool.values_mut(), game_controller.in_game_output()).await;
+                }
             },
             TxMessage::SuccessfulConnection(mut new_connection) => {
                 game_controller.add_client(new_connection.id);
