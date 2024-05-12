@@ -135,7 +135,6 @@ async fn player_connection(stream: TcpStream, sender: Sender<TxMessage>, player_
                 if msg.is_binary() {
 
                     let input_request = InputRequest::parse_from_bytes(&msg.into_data()).unwrap();
-                    println!("Input request: {:?}", input_request);
                     match input_request.field_type {
                         ClientRequestType::in_game_input => {
                             let _ = sender.send(TxMessage::PlayerInGameInput(input_request)).await;
