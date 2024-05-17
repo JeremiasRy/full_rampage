@@ -14,6 +14,7 @@
 }
 
 .main-wrapper {
+  width: 95vw;
   display: flex;
   flex-direction: row;
 }
@@ -22,11 +23,32 @@
   padding-left: 5em;
   display: flex;
   flex-direction: column;
+  min-width: 20%;
+}
+
+.lobby-wrapper__lobby-item button {
+  background-color: #4809ddfd;
+  border-radius: 0.5em;
 }
 
 .lobby-wrapper__lobby-item {
   padding: 0.5em;
   display: flex;
-  flex-direction: column;
-  border-bottom: 1px rgba(255, 255, 255, 0.87) solid;
+  flex-direction: row;
+  justify-content: space-between;
+  background-color: #ff003307;
+  border-radius: 0.5em;
+}
+
+.client {
+  background-color: #3300ff2d;
+  color: #ffffff;
+}
+
+.waiting {
+  border-bottom: 2px rgba(255, 230, 7, 0.904) solid;
+}
+
+.ready {
+  border-bottom: 2px rgba(7, 255, 27, 0.904) solid;
 }

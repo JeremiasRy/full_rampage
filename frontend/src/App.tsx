@@ -5,9 +5,7 @@ import { useEffect, useRef, useState } from "react";
 import isEqual from "lodash/isEqual";
 import proto from "protobufjs";
 import {
-  PlayerResponse,
   InGameOutput,
-  CannonEventResponse,
   LobbyMessage,
   MessageType,
   PlayerId,
@@ -30,6 +28,7 @@ function App() {
   const [lobby, setLobby] = useState<LobbyMessage>({
     gameStatus: GameControllerStatus.Stopped,
     type: MessageType.LobbyMessage,
+    countdownAmount: 0,
     clients: [],
   });
   const connection = useRef<WebSocket | null>(null);
@@ -122,13 +121,11 @@ function App() {
 
   useEffect(() => {
     let protoRoot: proto.Root;
-    let protoEnum: proto.Enum;
 
     const protoLoad = async () => {
       try {
         const root = await proto.load("messages-frontend.proto");
         protoRoot = root;
-        protoEnum = root.lookupEnum("MessageType");
         protoRootRef.current = protoRoot;
       } catch (e) {
         Error(`Failed to load proto: ${e}`);
@@ -140,7 +137,7 @@ function App() {
     const socket = new WebSocket("ws://127.0.0.1:9999");
 
     socket.addEventListener("message", async (event): Promise<void> => {
-      if (!protoRoot || !protoEnum) {
+      if (!protoRoot) {
         throw Error("protos not loaded correctly");
       }
       const data = event.data as Blob;
@@ -178,6 +175,7 @@ function App() {
               .decode(uintArr) as unknown as LobbyMessage;
 
             setLobby(lobby);
+            return;
           }
         }
       };
@@ -199,11 +197,10 @@ function App() {
 
   return (
     <div className="main-wrapper">
-      <GameWindow serverOutput={inGameOutput} />
+      <GameWindow inGameOutput={inGameOutput} currentClient={id} />
       <Lobby
-        gameStatus={lobby.gameStatus}
+        {...lobby}
         currentClientId={id}
-        clients={lobby.clients}
         onAction={sendLobbyStatusRequest}
       />
     </div>

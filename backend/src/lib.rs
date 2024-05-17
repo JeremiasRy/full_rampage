@@ -319,7 +319,6 @@ pub mod gamelogic {
 
         fn translate(&mut self) {
             let mut new_angle = (self.cannon_angle + self.delta_a) % 359.0;
-            println!("angle: {}, delta: {}", new_angle, self.delta_a);
 
             if new_angle < 0.0 {
                 new_angle += 360.0;
@@ -441,6 +440,10 @@ pub mod gamelogic {
 
             self.status = ClientStatus::in_game;
         }
+        pub fn back_to_lobby_and_wait(&mut self) {
+            self.lobby_status = ClientLobbyStatus::waiting;
+            self.status = ClientStatus::lobby;
+        }
     }
 
     pub struct GameController {
@@ -471,8 +474,13 @@ pub mod gamelogic {
                 handle_collisions: VecDeque::<(i32, i32)>::new(),
             }
         }
+
+        pub fn is_playing(&self) -> bool {
+            self.status == GameControllerStatus::playing
+        }
+
         pub fn clients_ready(&self) -> bool {
-            self.clients.iter().all(|(_, client)| client.lobby_status == ClientLobbyStatus::ready)
+            self.clients.len() > 1 && self.clients.iter().all(|(_, client)| client.lobby_status == ClientLobbyStatus::ready)
         }
         pub fn set_client_ready_for_war(&mut self, id:i32) {
             if let Some(client) = self.clients.get_mut(&id) {
@@ -487,6 +495,15 @@ pub mod gamelogic {
             self.status = GameControllerStatus::countdown;
             self.countdown = 240;
         }
+        pub fn countdown(&mut self) {
+            self.countdown -= 1;
+            if self.countdown <= 0 {
+                self.start();
+            }
+        }
+        pub fn is_counting_down(&self) -> bool {
+            self.status == GameControllerStatus::countdown
+        }
         pub fn start(&mut self) {
             if self.status != GameControllerStatus::countdown {
                 return;
@@ -496,20 +513,16 @@ pub mod gamelogic {
         pub fn stop(&mut self) {
             self.status = GameControllerStatus::stopped;
             self.players.clear();
-            self.clients.iter_mut().for_each(|(_, client)| client.status = ClientStatus::lobby)
+            self.clients.iter_mut().for_each(|(_, client)| {client.back_to_lobby_and_wait()})
         }
-        pub fn tick(&mut self) {
-
-            if self.status == GameControllerStatus::countdown {
-                self.countdown -= 1;
-                if self.countdown <= 0 {
-                    self.status = GameControllerStatus::playing;
-                }
-                return;
-            }
-
+        pub fn tick(&mut self) -> Option<()> {
             let mut cannon_shot_ids_marked_for_remove = Vec::with_capacity(self.cannon_shots.len());
             let mut explosions_marked_for_remove = Vec::with_capacity(self.explosions.len());
+
+            if self.in_game_clients() < 2 {
+                self.stop();
+                return Some(())
+            }
 
             while let Some(player_id_pair) = self.handle_collisions.pop_front() {
                 let player_ids = vec![player_id_pair.0, player_id_pair.1];
@@ -565,9 +578,10 @@ pub mod gamelogic {
             for id in explosions_marked_for_remove {
                 self.explosions.remove_entry(&id);
             }
+            None
         }
         pub fn should_tick(&self) -> bool {
-            self.status == GameControllerStatus::countdown || self.cannon_shots.len() > 0 || self.players.iter().any(|(_, player)| player.should_tick()) || !self.explosions.is_empty()
+            self.status == GameControllerStatus::playing
         }
         pub fn player_input(&mut self, input: InputRequest) {
             if let Some(player) = self.players.get_mut(&input.get_player_id()) {
@@ -578,7 +592,9 @@ pub mod gamelogic {
             self.clients.insert(id, Client::new());
         }
         pub fn drop_client(&mut self, client_id: i32) {
-            self.clients.remove_entry(&client_id);
+            if let Some((id, _)) = self.clients.remove_entry(&client_id) {
+                self.players.remove_entry(&id);
+            };
         }
         pub fn lobby_output(&mut self) -> ServerLobbyResponse {
             let mut lobby_response = ServerLobbyResponse::new();
@@ -592,6 +608,7 @@ pub mod gamelogic {
 
             lobby_response.set_clients(RepeatedField::from_vec(clients_in_lobby));
             lobby_response.set_gameStatus(self.status);
+            lobby_response.set_countdown_amount(self.countdown);
             lobby_response.set_field_type(MessageType::lobby_message);
             lobby_response
         }
@@ -652,6 +669,9 @@ pub mod gamelogic {
                     }
                 }
             }
+        }
+        fn in_game_clients(&self) -> usize {
+            self.clients.values().filter(|client| client.status == ClientStatus::in_game).count()
         }
         fn handle_collision(first: &mut Player, second: &mut Player) {
             let first_calculated_x = GameController::elastic_collision(first.delta_x, second.delta_x);

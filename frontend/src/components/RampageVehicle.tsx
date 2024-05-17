@@ -1,67 +1,42 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useMemo } from "react";
 import { Graphics as GraphicsComponent } from "@pixi/react";
 import { Graphics } from "@pixi/graphics";
-import { InGameStatus } from "../types/responses";
 
 export interface RampageVehicleProps {
   x: number;
   y: number;
   cannonX: number;
   cannonY: number;
-  status: number;
+  client: boolean;
 }
 
-function getCenter(vehicle: RampageVehicleProps) {
+export function getCenter(vehicle: RampageVehicleProps) {
   return { centerX: vehicle.x + 25 / 2, centerY: vehicle.y + 25 / 2 };
 }
 
 function DrawRampageVehicle(props: RampageVehicleProps) {
-  const [flicker, setFlickerColor] = useState(0xff3300);
-  const [cannonFlicker, setCannonFlickerColor] = useState(0xffffff);
+  const color = props.client ? 0x3300ff : 0xff3300;
   const drawProps = useMemo(() => {
     return { ...props };
-  }, [props.x, props.y, props.cannonX, props.cannonY, props.status]);
-
-  useEffect(() => {
-    if (props.status === InGameStatus.Dead) {
-      const intervalId = setInterval(() => {
-        setFlickerColor((prev) => (prev === 0x0 ? 0xff3300 : 0x0));
-        setCannonFlickerColor((prev) => (prev === 0x0 ? 0xffffff : 0x0));
-      }, 200);
-
-      return () => {
-        clearInterval(intervalId);
-      };
-    } else if (props.status === InGameStatus.Respawning) {
-      const intervalId = setInterval(() => {
-        setFlickerColor((prev) => (prev === 0x0 ? 0xff3300 : 0x0));
-        setCannonFlickerColor((prev) => (prev === 0x0 ? 0xffffff : 0x0));
-      }, 100);
-
-      return () => {
-        clearInterval(intervalId);
-      };
-    }
-  }, [props.status]);
+  }, [props.x, props.y, props.cannonX, props.cannonY]);
 
   const draw = useCallback(
     (g: Graphics) => {
-      const { x, y, cannonX, cannonY, centerX, centerY, status } = {
+      const { x, y, cannonX, cannonY, centerX, centerY } = {
         ...drawProps,
         ...getCenter(drawProps),
       };
 
       g.clear()
-        .beginFill(status ? flicker : 0xff3300)
+        .beginFill(color)
         .drawRect(x, y, 25, 25)
         .endFill()
         .moveTo(centerX, centerY)
-        .lineStyle(2, status ? cannonFlicker : 0xffffff)
+        .lineStyle(2, 0xffffff)
         .lineTo(cannonX, cannonY);
     },
-    [drawProps, flicker]
+    [drawProps]
   );
-
   return <GraphicsComponent draw={draw} />;
 }
 

@@ -82,6 +82,7 @@ message ServerLobbyResponse {
     MessageType type = 1;
     repeated ClientInfo clients = 2;
     GameControllerStatus gameStatus = 3;
+    int32 countdown_amount = 4;
 }
 
 message ServerGameFrameResponse {

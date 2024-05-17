@@ -9,6 +9,7 @@ export type LobbyMessage = {
   type: MessageType;
   gameStatus: GameControllerStatus;
   clients: Client[];
+  countdownAmount: number;
 };
 
 export type Client = {
