@@ -120,6 +120,7 @@ async fn main_game_loop(mut receiver: Receiver<TxMessage>) {
                         },
                         Some(GameControllerTickOutput::WeHaveAWinner) => {
                             send_output_to_all_clients(connection_pool.values_mut(), game_controller.lobby_output()).await;
+                            send_output_to_all_clients(connection_pool.values_mut(), game_controller.in_game_output()).await;
                         }
                         None => {
                             send_output_to_all_clients(connection_pool.values_mut(), game_controller.in_game_output()).await;

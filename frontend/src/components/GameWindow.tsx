@@ -1,16 +1,43 @@
-import { Stage } from "@pixi/react";
+import { Sprite, Stage } from "@pixi/react";
 import RampageVehicle from "./RampageVehicle";
 import Shot from "./Shot";
-import { InGameOutput, InGameStatus } from "../types/responses";
+import {
+  GameControllerStatus,
+  InGameOutput,
+  InGameStatus,
+} from "../types/responses";
 import DrawRespawningVehicle from "./RespawningVehicle";
 
 function GameWindow(props: {
   inGameOutput: InGameOutput;
   currentClient: number;
+  status: GameControllerStatus;
+  countdown: number;
 }) {
   const { players, shots, explosions } = { ...props.inGameOutput }; // make this into context some day
+  const centerForLogoX = (1200 - 1024 * 0.8) / 2;
+  const centerForLogoY = (800 - 1024 * 0.8) / 2;
+
+  const getAlpha = () => {
+    const status = props.status;
+    if (status === GameControllerStatus.Stopped) {
+      return 0.5;
+    }
+    if (status === GameControllerStatus.Countdown) {
+      return (props.countdown + 60) / 600;
+    }
+    return 0.1;
+  };
+
   return (
-    <Stage width={1200} height={800}>
+    <Stage width={1200} height={800} className="game-window">
+      <Sprite
+        image={"../../public/logo.webp"}
+        x={centerForLogoX}
+        y={centerForLogoY}
+        scale={0.8}
+        alpha={getAlpha()}
+      />
       {players.map((player) =>
         player.inGameStatus === InGameStatus.Alive ? (
           <RampageVehicle

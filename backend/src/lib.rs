@@ -537,7 +537,9 @@ pub mod gamelogic {
         pub fn stop(&mut self) {
             self.status = GameControllerStatus::stopped;
             self.players.clear();
-            self.clients.iter_mut().for_each(|(_, client)| client.back_to_lobby_and_wait())
+            self.explosions.clear();
+            self.cannon_shots.clear();
+            self.clients.iter_mut().for_each(|(_, client)| client.back_to_lobby_and_wait());
         }
         pub fn tick(&mut self) -> Option<GameControllerTickOutput> {
             let mut cannon_shot_ids_marked_for_remove = Vec::with_capacity(self.cannon_shots.len());

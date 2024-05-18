@@ -2,28 +2,62 @@
   font-family: Inter, system-ui, Avenir, Helvetica, Arial, sans-serif;
   line-height: 1.5;
   font-weight: 400;
+  height: 99vh;
+  width: auto;
+  box-sizing: border-box;
 
   color-scheme: light dark;
   color: rgba(255, 255, 255, 0.87);
   background-color: #242424;
-
+  /*background-image: url(../public/bg.webp);
+  opacity: 1;
+*/
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
 
+body {
+  height: 100%;
+  width: auto;
+}
+
+#root {
+  height: 100%;
+  width: auto;
+  opacity: 1;
+}
+
 .main-wrapper {
-  width: 95vw;
+  height: 100%;
+  width: auto;
   display: flex;
   flex-direction: row;
+  justify-content: center;
+  align-items: center;
+  gap: 1em;
+}
+
+.game-window {
+  box-shadow: #ff000013 5px 13px 20px;
 }
 
 .lobby-wrapper {
-  padding-left: 5em;
+  background-color: rgba(240, 248, 255, 0.062);
+  padding: 1em;
   display: flex;
   flex-direction: column;
-  min-width: 20%;
+  height: 800px;
+  box-sizing: border-box;
+  min-width: 20vw;
+  justify-content: start;
+}
+
+.lobby__clients {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5em;
 }
 
 .lobby-wrapper__lobby-item button {
@@ -46,9 +80,9 @@
 }
 
 .waiting {
-  border-bottom: 2px rgba(255, 230, 7, 0.904) solid;
+  border-left: 2px rgba(255, 230, 7, 0.904) solid;
 }
 
 .ready {
-  border-bottom: 2px rgba(7, 255, 27, 0.904) solid;
+  border-left: 2px rgba(7, 255, 27, 0.904) solid;
 }

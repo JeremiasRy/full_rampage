@@ -61,33 +61,37 @@ export default function Lobby(props: LobbyProps) {
   };
   return (
     <div className="lobby-wrapper">
-      <h1>Lobby!</h1>
-      <h2>
-        {printGameStatus()}{" "}
-        {gameStatus === GameControllerStatus.Countdown &&
-          Math.floor(countdownAmount / 60)}
-      </h2>
-      {clients
-        .sort((a, b) => b.score - a.score)
-        .map(({ id, lobbyStatus, score }) => (
-          <div
-            className={`lobby-wrapper__lobby-item ${
-              currentClientId === id && "client"
-            } 
+      <div className="lobby__headers">
+        <h1>Lobby</h1>
+        <h2>
+          {printGameStatus()}{" "}
+          {gameStatus === GameControllerStatus.Countdown &&
+            Math.floor(countdownAmount / 60)}
+        </h2>
+      </div>
+      <div className="lobby__clients">
+        {clients
+          .sort((a, b) => b.score - a.score)
+          .map(({ id, lobbyStatus, score }) => (
+            <div
+              className={`lobby-wrapper__lobby-item ${
+                currentClientId === id && "client"
+              } 
           ${lobbyStatus === ClientLobbyStatus.Ready ? "ready" : "waiting"}`}
-            key={id}
-          >
-            Player: {id}{" "}
-            {GameControllerStatus.Playing && <> | Score: {score} </>}|{" "}
-            {printClientStatus(lobbyStatus)}
-            {currentClientId === id &&
-              lobbyStatus === ClientLobbyStatus.Waiting &&
-              gameStatus === GameControllerStatus.Stopped && (
-                <button onClick={onAction}>Ready?</button>
-              )}
-            {id === winnerOfLastGame && "Winner"}
-          </div>
-        ))}
+              key={id}
+            >
+              Player: {id}{" "}
+              {GameControllerStatus.Playing && <> | Score: {score} </>}|{" "}
+              {printClientStatus(lobbyStatus)}
+              {currentClientId === id &&
+                lobbyStatus === ClientLobbyStatus.Waiting &&
+                gameStatus === GameControllerStatus.Stopped && (
+                  <button onClick={onAction}>Ready?</button>
+                )}
+              {id === winnerOfLastGame && "Winner"}
+            </div>
+          ))}
+      </div>
     </div>
   );
 }

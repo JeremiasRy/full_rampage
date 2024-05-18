@@ -198,7 +198,12 @@ function App() {
 
   return (
     <div className="main-wrapper">
-      <GameWindow inGameOutput={inGameOutput} currentClient={id} />
+      <GameWindow
+        inGameOutput={inGameOutput}
+        currentClient={id}
+        status={lobby.gameStatus}
+        countdown={lobby.countdownAmount}
+      />
       <Lobby
         {...lobby}
         currentClientId={id}
