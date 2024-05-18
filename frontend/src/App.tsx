@@ -29,6 +29,7 @@ function App() {
     gameStatus: GameControllerStatus.Stopped,
     type: MessageType.LobbyMessage,
     countdownAmount: 0,
+    winnerOfLastGame: 0,
     clients: [],
   });
   const connection = useRef<WebSocket | null>(null);

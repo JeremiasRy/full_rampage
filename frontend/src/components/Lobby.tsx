@@ -9,11 +9,19 @@ export interface LobbyProps {
   currentClientId: number;
   clients: Client[];
   countdownAmount: number;
+  winnerOfLastGame: number;
   onAction: () => void;
 }
 
 export default function Lobby(props: LobbyProps) {
-  const { clients, currentClientId, gameStatus, countdownAmount, onAction } = {
+  const {
+    clients,
+    currentClientId,
+    gameStatus,
+    countdownAmount,
+    winnerOfLastGame,
+    onAction,
+  } = {
     ...props,
   };
   const printGameStatus = () => {
@@ -35,7 +43,7 @@ export default function Lobby(props: LobbyProps) {
       if (clientStatus === ClientLobbyStatus.Ready) {
         return "Playing";
       } else {
-        return "Waiting...";
+        return "Spectating...";
       }
     } else if (gameStatus === GameControllerStatus.Countdown) {
       if (clientStatus === ClientLobbyStatus.Ready) {
@@ -57,24 +65,29 @@ export default function Lobby(props: LobbyProps) {
       <h2>
         {printGameStatus()}{" "}
         {gameStatus === GameControllerStatus.Countdown &&
-          Math.round(countdownAmount / 10)}
+          Math.floor(countdownAmount / 60)}
       </h2>
-      {clients.map(({ id, lobbyStatus }) => (
-        <div
-          className={`lobby-wrapper__lobby-item ${
-            currentClientId === id && "client"
-          } 
+      {clients
+        .sort((a, b) => b.score - a.score)
+        .map(({ id, lobbyStatus, score }) => (
+          <div
+            className={`lobby-wrapper__lobby-item ${
+              currentClientId === id && "client"
+            } 
           ${lobbyStatus === ClientLobbyStatus.Ready ? "ready" : "waiting"}`}
-          key={id}
-        >
-          Player: {id} | {printClientStatus(lobbyStatus)}
-          {currentClientId === id &&
-            lobbyStatus === ClientLobbyStatus.Waiting &&
-            gameStatus === GameControllerStatus.Stopped && (
-              <button onClick={onAction}>Ready?</button>
-            )}
-        </div>
-      ))}
+            key={id}
+          >
+            Player: {id}{" "}
+            {GameControllerStatus.Playing && <> | Score: {score} </>}|{" "}
+            {printClientStatus(lobbyStatus)}
+            {currentClientId === id &&
+              lobbyStatus === ClientLobbyStatus.Waiting &&
+              gameStatus === GameControllerStatus.Stopped && (
+                <button onClick={onAction}>Ready?</button>
+              )}
+            {id === winnerOfLastGame && "Winner"}
+          </div>
+        ))}
     </div>
   );
 }

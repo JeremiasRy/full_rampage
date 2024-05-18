@@ -9,7 +9,7 @@ use tokio::net::{TcpListener, TcpStream};
 use tokio::sync::mpsc::Receiver;
 use tokio::time::Instant;
 use tokio_tungstenite::{accept_async, WebSocketStream};
-use backend::gamelogic::GameController;
+use backend::gamelogic::{GameController, GameControllerTickOutput};
 use backend::{ClientLobbyStatus, ClientRequestType, InputRequest, MessageType};
 use backend::PlayerId;
 
@@ -26,6 +26,7 @@ enum TxMessage  {
     Disconnect(i32),
     Tick
 }
+
 
 #[tokio::main]
 async fn main() {
@@ -109,10 +110,21 @@ async fn main_game_loop(mut receiver: Receiver<TxMessage>) {
             }, 
             TxMessage::Tick => {
                 if game_controller.should_tick() {
-                    if let Some(()) = game_controller.tick() {
-                        send_output_to_all_clients(connection_pool.values_mut(), game_controller.lobby_output()).await;
-                    };
-                    send_output_to_all_clients(connection_pool.values_mut(), game_controller.in_game_output()).await;
+                    match game_controller.tick() {
+                        Some(GameControllerTickOutput::NotEnoughPlayers) => {
+                            send_output_to_all_clients(connection_pool.values_mut(), game_controller.lobby_output()).await;
+                        },
+                        Some(GameControllerTickOutput::ScoreChanged) => {
+                            send_output_to_all_clients(connection_pool.values_mut(), game_controller.lobby_output()).await;
+                            send_output_to_all_clients(connection_pool.values_mut(), game_controller.in_game_output()).await;
+                        },
+                        Some(GameControllerTickOutput::WeHaveAWinner) => {
+                            send_output_to_all_clients(connection_pool.values_mut(), game_controller.lobby_output()).await;
+                        }
+                        None => {
+                            send_output_to_all_clients(connection_pool.values_mut(), game_controller.in_game_output()).await;
+                        }
+                    }
                 } else if game_controller.is_counting_down() {
                     game_controller.countdown();
                     send_output_to_all_clients(connection_pool.values_mut(), game_controller.lobby_output()).await;

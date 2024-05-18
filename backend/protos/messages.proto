@@ -61,6 +61,7 @@ message ClientInfo {
     int32 id = 1;
     ClientLobbyStatus lobby_status = 2;
     ClientStatus status = 3;
+    int32 score = 4;
 }
 
 message PlayerInGameResponse {
@@ -68,7 +69,7 @@ message PlayerInGameResponse {
     Point cannon_position = 2;
     PlayerInGameStatus in_game_status = 3;
     int32 id = 4;
-    int32 score = 5;
+    int32 tank_rotation = 6;
 }
 
 message CannonEventResponse {
@@ -83,6 +84,7 @@ message ServerLobbyResponse {
     repeated ClientInfo clients = 2;
     GameControllerStatus gameStatus = 3;
     int32 countdown_amount = 4;
+    int32 winner_of_last_game = 5;
 }
 
 message ServerGameFrameResponse {

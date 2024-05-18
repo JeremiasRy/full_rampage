@@ -7,8 +7,8 @@ pub mod gamelogic {
     use protobuf::RepeatedField;
     use rand::{thread_rng, Rng};
 
-    const PLAYER_SIZE: f32 = 25.0;
-    const CANNON_LENGTH: f32 = 25.0;
+    const PLAYER_SIZE: f32 = 40.0;
+    const CANNON_LENGTH: f32 = 40.0;
     const MAX_CANNON_SHOT_LENGTH: i32 = 300;
     const BOUNDS_HEIGHT: i32 = 800;
     const BOUNDS_WIDTH: i32 = 1200;
@@ -88,7 +88,7 @@ pub mod gamelogic {
             }
             self.size += 10;
         }
-        pub fn check_for_hit(&mut self, player_pos: ControllerPoint) -> bool {
+        pub fn check_for_hit(&self, player_pos: ControllerPoint) -> bool {
             let self_x = self.position.x;
             let self_y = self.position.y;
             let current_explosion_radius = (self.size / 2)as f32;
@@ -220,6 +220,8 @@ pub mod gamelogic {
         id: i32,
         position: ControllerPoint,
         cannon_angle: f32,
+        tank_rotation: f32,
+        score: i32,
         is_loading_cannon: bool,
         power_loaded: i32,
         cannon_shot: Option<CannonShot>,
@@ -237,6 +239,8 @@ pub mod gamelogic {
                 id,
                 position: ControllerPoint::random_point(max_height - PLAYER_SIZE as i32, max_width - PLAYER_SIZE as i32),
                 cannon_angle: 0.0,
+                tank_rotation: 0.0, // TODO
+                score: 0,
                 input: PlayerInput::NoInput as i32,
                 delta_x: 0.0,
                 delta_y: 0.0,
@@ -300,7 +304,12 @@ pub mod gamelogic {
         pub fn input(&mut self, input:i32) {
             self.input = input
         }
-
+        pub fn get_score(&self) -> i32 {
+            self.score
+        }
+        pub fn increment_score(&mut self) {
+            self.score += 1;
+        }
         fn reverse_delta_y(&mut self) {
             if self.delta_y < 0.0 {
                 self.delta_y = 0.0 + self.delta_y.abs()
@@ -446,6 +455,11 @@ pub mod gamelogic {
         }
     }
 
+    pub enum GameControllerTickOutput {
+        NotEnoughPlayers,
+        ScoreChanged,
+        WeHaveAWinner
+    }
     pub struct GameController {
         height: i32,
         width: i32,
@@ -457,11 +471,13 @@ pub mod gamelogic {
         internal_id_count: i32,
         status: GameControllerStatus,
         countdown: i32,
+        winner_of_last_game: i32,
     }
 
     impl  GameController {
         pub fn new() -> GameController {
             GameController {
+                winner_of_last_game: 0,
                 status: GameControllerStatus::stopped,
                 countdown: 0,
                 internal_id_count: 0,
@@ -504,6 +520,14 @@ pub mod gamelogic {
         pub fn is_counting_down(&self) -> bool {
             self.status == GameControllerStatus::countdown
         }
+        pub fn check_for_winner(&mut self) -> Option<GameControllerTickOutput> {
+            if let Some((id, _)) = self.players.iter().find(|(_, player)| player.get_score() > 10) {
+                self.winner_of_last_game = *id;
+                self.stop();
+                return Some(GameControllerTickOutput::WeHaveAWinner)
+            }
+            None
+        }
         pub fn start(&mut self) {
             if self.status != GameControllerStatus::countdown {
                 return;
@@ -513,15 +537,16 @@ pub mod gamelogic {
         pub fn stop(&mut self) {
             self.status = GameControllerStatus::stopped;
             self.players.clear();
-            self.clients.iter_mut().for_each(|(_, client)| {client.back_to_lobby_and_wait()})
+            self.clients.iter_mut().for_each(|(_, client)| client.back_to_lobby_and_wait())
         }
-        pub fn tick(&mut self) -> Option<()> {
+        pub fn tick(&mut self) -> Option<GameControllerTickOutput> {
             let mut cannon_shot_ids_marked_for_remove = Vec::with_capacity(self.cannon_shots.len());
             let mut explosions_marked_for_remove = Vec::with_capacity(self.explosions.len());
+            let mut give_scores_to_these_players = Vec::<i32>::new();
 
             if self.in_game_clients() < 2 {
                 self.stop();
-                return Some(())
+                return Some(GameControllerTickOutput::NotEnoughPlayers)
             }
 
             while let Some(player_id_pair) = self.handle_collisions.pop_front() {
@@ -549,7 +574,6 @@ pub mod gamelogic {
                     }
                 }
             }
-
             if !self.explosions.is_empty() {
                 for (id, explosion) in self.explosions.iter_mut() {
                     explosion.tick();
@@ -557,8 +581,9 @@ pub mod gamelogic {
                         explosions_marked_for_remove.push(*id);
                         continue;
                     }
-                    for (_, player) in self.players.iter_mut().filter(|(_, player)| explosion.check_for_hit(player.position)) {
+                    for (_, player) in self.players.iter_mut().filter(|(id, player)| explosion.from_player_id != **id && explosion.check_for_hit(player.position) && player.cooldown == 0) {
                         player.die();
+                        give_scores_to_these_players.push(explosion.from_player_id);
                     };
                 }
             }
@@ -578,7 +603,15 @@ pub mod gamelogic {
             for id in explosions_marked_for_remove {
                 self.explosions.remove_entry(&id);
             }
-            None
+            if !give_scores_to_these_players.is_empty() {
+                for id in give_scores_to_these_players.as_mut_slice() {
+                    if let Some(player) = self.players.get_mut(&id) {
+                        player.increment_score();
+                    }
+                }
+                return Some(GameControllerTickOutput::ScoreChanged);
+            }
+            self.check_for_winner()
         }
         pub fn should_tick(&self) -> bool {
             self.status == GameControllerStatus::playing
@@ -598,11 +631,18 @@ pub mod gamelogic {
         }
         pub fn lobby_output(&mut self) -> ServerLobbyResponse {
             let mut lobby_response = ServerLobbyResponse::new();
+            let is_playing = self.is_playing();
             let clients_in_lobby = self.clients.iter_mut().map(|(id, client)| {
                 let mut client_info = ClientInfo::new();
                 client_info.set_id(*id);
                 client_info.set_status(client.status);
                 client_info.set_lobby_status(client.lobby_status);
+                client_info.set_score(0);
+                if is_playing {
+                    if let Some(player) = self.players.get(id) {
+                        client_info.set_score(player.get_score())
+                    }
+                }
                 client_info
             }).collect();
 
@@ -610,6 +650,7 @@ pub mod gamelogic {
             lobby_response.set_gameStatus(self.status);
             lobby_response.set_countdown_amount(self.countdown);
             lobby_response.set_field_type(MessageType::lobby_message);
+            lobby_response.set_winner_of_last_game(self.winner_of_last_game);
             lobby_response
         }
         pub fn in_game_output(&mut self) -> ServerGameFrameResponse {

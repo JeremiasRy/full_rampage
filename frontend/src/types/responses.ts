@@ -10,12 +10,14 @@ export type LobbyMessage = {
   gameStatus: GameControllerStatus;
   clients: Client[];
   countdownAmount: number;
+  winnerOfLastGame: number;
 };
 
 export type Client = {
   id: number;
   lobbyStatus: ClientLobbyStatus;
   status: ClientStatus;
+  score: number;
 };
 export type PlayerId = {
   type: number;
