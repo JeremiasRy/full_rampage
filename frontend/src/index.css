@@ -9,9 +9,9 @@
   color-scheme: light dark;
   color: rgba(255, 255, 255, 0.87);
   background-color: #242424;
-  /*background-image: url(../public/bg.webp);
+  background-image: url(./bg.webp);
   opacity: 1;
-*/
+
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
@@ -40,11 +40,15 @@ body {
 }
 
 .game-window {
-  box-shadow: #ff000013 5px 13px 20px;
+  border: #002fff48 solid 1px;
+  border-radius: 0.5em;
+  box-shadow: #002fff48 1px 1px 1px;
 }
 
 .lobby-wrapper {
-  background-color: rgba(240, 248, 255, 0.062);
+  background-color: rgba(240, 248, 255, 0.212);
+  border: #002fff48 solid 1px;
+  border-radius: 0.5em;
   padding: 1em;
   display: flex;
   flex-direction: column;
@@ -60,6 +64,19 @@ body {
   gap: 0.5em;
 }
 
+.soldier__avatar {
+  height: 50px;
+  width: 50px;
+  background: url("./avatar.png");
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: cover;
+  border: #ff00ea48 solid 1px;
+}
+
+.info {
+}
+
 .lobby-wrapper__lobby-item button {
   background-color: #4809ddfd;
   border-radius: 0.5em;
@@ -70,6 +87,7 @@ body {
   display: flex;
   flex-direction: row;
   justify-content: space-between;
+  align-items: center;
   background-color: #ff003307;
   border-radius: 0.5em;
 }

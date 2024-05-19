@@ -69,7 +69,7 @@ message PlayerInGameResponse {
     Point cannon_position = 2;
     PlayerInGameStatus in_game_status = 3;
     int32 id = 4;
-    int32 tank_rotation = 6;
+    int32 tank_rotation = 5;
 }
 
 message CannonEventResponse {

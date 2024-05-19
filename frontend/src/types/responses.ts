@@ -29,6 +29,7 @@ export type PlayerResponse = {
   position: Position;
   cannonPosition: Position;
   inGameStatus: InGameStatus;
+  tankRotation: number;
 };
 
 export type CannonEventResponse = {

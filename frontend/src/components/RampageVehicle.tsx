@@ -1,5 +1,5 @@
 import { useCallback, useMemo } from "react";
-import { Graphics as GraphicsComponent } from "@pixi/react";
+import { Container, Graphics as GraphicsComponent } from "@pixi/react";
 import { Graphics } from "@pixi/graphics";
 
 export interface RampageVehicleProps {
@@ -7,26 +7,31 @@ export interface RampageVehicleProps {
   y: number;
   cannonX: number;
   cannonY: number;
+  rotation: number;
   client: boolean;
-}
-
-export function getCenter(vehicle: RampageVehicleProps) {
-  return { centerX: vehicle.x + 40 / 2, centerY: vehicle.y + 40 / 2 };
 }
 
 function DrawRampageVehicle(props: RampageVehicleProps) {
   const color = props.client ? 0x3300ff : 0xff3300;
+  const centerX = 40 / 2;
+  const centerY = 40 / 2;
   const drawProps = useMemo(() => {
     return { ...props };
   }, [props.x, props.y, props.cannonX, props.cannonY]);
 
+  const drawCannon = useCallback(
+    (g: Graphics) => {
+      const { x, y, cannonX, cannonY } = { ...drawProps };
+      g.clear();
+      g.lineStyle(2, 0xffffff)
+        .moveTo(x + centerX, y + centerY)
+        .lineTo(cannonX, cannonY);
+    },
+    [drawProps]
+  );
+
   const draw = useCallback(
     (g: Graphics) => {
-      const { x, y, cannonX, cannonY, centerX, centerY } = {
-        ...drawProps,
-        ...getCenter(drawProps),
-      };
-
       const tankWidth = 40;
       const tankHeight = 40;
       const turretRadius = 7;
@@ -34,32 +39,32 @@ function DrawRampageVehicle(props: RampageVehicleProps) {
       const trackHeight = tankHeight;
       const bodyWidth = tankWidth - 2 * trackWidth;
       const bodyHeight = tankHeight;
-      const bodyOffsetX = x + trackWidth;
-      const bodyOffsetY = y;
+      const bodyOffsetX = 0 + trackWidth;
+      const bodyOffsetY = 0;
 
       g.clear();
 
       g.beginFill(0x444444);
-      g.drawRect(x, y, trackWidth, trackHeight); // Left track
-      g.drawRect(x + tankWidth - trackWidth, y, trackWidth, trackHeight); // Right track
+      g.drawRect(0, 0, trackHeight, trackWidth); // Top track (originally left track, rotated 90 degrees)
+      g.drawRect(0, tankHeight - trackWidth, trackHeight, trackWidth); // Bottom track (originally right track, rotated 90 degrees)
 
       g.lineStyle(1, 0x222222);
-      for (let i = y; i < y + trackHeight; i += 5) {
-        g.moveTo(x, i).lineTo(x + trackWidth, i); // Left track details
-        g.moveTo(x + tankWidth - trackWidth, i).lineTo(x + tankWidth, i); // Right track details
+      for (let i = 0; i < trackHeight; i += 5) {
+        g.moveTo(i, 0).lineTo(i, trackWidth); // Top track details
+        g.moveTo(i, tankHeight - trackWidth).lineTo(i, tankHeight); // Bottom track details
       }
       g.endFill();
 
       g.beginFill(color)
-        .drawRect(bodyOffsetX, bodyOffsetY, bodyWidth, bodyHeight)
+        .drawRect(bodyOffsetY, bodyOffsetX, bodyHeight, bodyWidth) // Draw body rotated 90 degrees
         .endFill();
 
       g.beginFill(0x0000ff, 0.2);
-      g.drawRect(bodyOffsetX, bodyOffsetY, bodyWidth, bodyHeight / 2);
+      g.drawRect(bodyOffsetY, bodyOffsetX, bodyHeight / 2, bodyWidth);
       g.endFill();
 
       g.beginFill(0xffffff, 0.1);
-      g.drawRect(bodyOffsetX, bodyOffsetY, bodyWidth, bodyHeight / 4);
+      g.drawRect(bodyOffsetY, bodyOffsetX, bodyHeight / 4, bodyWidth);
       g.endFill();
 
       g.beginFill(0x555555, 0.8)
@@ -69,10 +74,6 @@ function DrawRampageVehicle(props: RampageVehicleProps) {
         .drawCircle(centerX, centerY, turretRadius)
         .endFill();
 
-      g.lineStyle(2, 0xffffff)
-        .moveTo(centerX, centerY)
-        .lineTo(cannonX, cannonY);
-
       g.lineStyle(1, 0xaaaaaa)
         .moveTo(centerX - turretRadius / 2, centerY)
         .lineTo(centerX + turretRadius / 2, centerY)
@@ -80,14 +81,25 @@ function DrawRampageVehicle(props: RampageVehicleProps) {
         .lineTo(centerX, centerY + turretRadius / 2);
 
       g.lineStyle(1, 0xaaaaaa)
-        .moveTo(bodyOffsetX + 5, bodyOffsetY + 5)
-        .lineTo(bodyOffsetX + bodyWidth - 5, bodyOffsetY + 5)
-        .moveTo(bodyOffsetX + 5, bodyOffsetY + bodyHeight - 5)
-        .lineTo(bodyOffsetX + bodyWidth - 5, bodyOffsetY + bodyHeight - 5);
+        .moveTo(bodyOffsetY + 5, bodyOffsetX + 5)
+        .lineTo(bodyOffsetY + bodyHeight - 5, bodyOffsetX + 5)
+        .moveTo(bodyOffsetY + 5, bodyOffsetX + bodyWidth - 5)
+        .lineTo(bodyOffsetY + bodyHeight - 5, bodyOffsetX + bodyWidth - 5);
     },
     [drawProps]
   );
-  return <GraphicsComponent draw={draw} />;
+  return (
+    <>
+      <Container
+        angle={props.rotation}
+        position={{ x: props.x + centerX, y: props.y + centerY }}
+        pivot={{ x: centerX, y: centerY }}
+      >
+        <GraphicsComponent draw={draw} />
+      </Container>
+      <GraphicsComponent draw={drawCannon} />
+    </>
+  );
 }
 
 export default DrawRampageVehicle;

@@ -32,7 +32,7 @@ function GameWindow(props: {
   return (
     <Stage width={1200} height={800} className="game-window">
       <Sprite
-        image={"../../public/logo.webp"}
+        image={"./logo.webp"}
         x={centerForLogoX}
         y={centerForLogoY}
         scale={0.8}
@@ -46,6 +46,7 @@ function GameWindow(props: {
             y={player.position.y}
             cannonX={player.cannonPosition.x}
             cannonY={player.cannonPosition.y}
+            rotation={player.tankRotation}
             client={player.id === props.currentClient}
           />
         ) : (
@@ -56,6 +57,7 @@ function GameWindow(props: {
               y: player.position.y,
               cannonX: player.cannonPosition.x,
               cannonY: player.cannonPosition.y,
+              rotation: player.tankRotation,
               client: player.id === props.currentClient,
             }}
             flickerInterval={

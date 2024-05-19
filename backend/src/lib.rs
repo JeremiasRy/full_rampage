@@ -7,13 +7,14 @@ pub mod gamelogic {
     use protobuf::RepeatedField;
     use rand::{thread_rng, Rng};
 
+    const ANGLE_EASING_FACTOR: f32 = 0.2;
     const PLAYER_SIZE: f32 = 40.0;
     const CANNON_LENGTH: f32 = 40.0;
     const MAX_CANNON_SHOT_LENGTH: i32 = 300;
     const BOUNDS_HEIGHT: i32 = 800;
     const BOUNDS_WIDTH: i32 = 1200;
     const PLAYER_MASS: f32 = 1.0; // just to keep things simple, mass could be added to players for more interesting players
-
+    #[derive(Debug, PartialEq, Eq, Hash, Clone, Copy)]
     enum PlayerInput {
         NoInput,
         Up = 1,
@@ -221,16 +222,19 @@ pub mod gamelogic {
         position: ControllerPoint,
         cannon_angle: f32,
         tank_rotation: f32,
+        target_rotation: f32,
         score: i32,
         is_loading_cannon: bool,
         power_loaded: i32,
         cannon_shot: Option<CannonShot>,
         input: i32,
+        speed: f32,
         delta_x: f32,
         delta_y: f32,
         delta_a: f32,
         cooldown: i32,
         player_in_game_status: PlayerInGameStatus,
+        input_to_angle_hash: HashMap<PlayerInput, f32>,
     }
 
     impl Player {
@@ -240,8 +244,10 @@ pub mod gamelogic {
                 position: ControllerPoint::random_point(max_height - PLAYER_SIZE as i32, max_width - PLAYER_SIZE as i32),
                 cannon_angle: 0.0,
                 tank_rotation: 0.0, // TODO
+                target_rotation: 0.0,
                 score: 0,
                 input: PlayerInput::NoInput as i32,
+                speed: 0.0,
                 delta_x: 0.0,
                 delta_y: 0.0,
                 delta_a: 0.0,
@@ -249,8 +255,13 @@ pub mod gamelogic {
                 cannon_shot: None,
                 power_loaded: 0,
                 cooldown: 1,
-                player_in_game_status: PlayerInGameStatus::respawning
+                player_in_game_status: PlayerInGameStatus::respawning,
+                input_to_angle_hash : HashMap::from([(PlayerInput::Down, 90.0), (PlayerInput::Right, 0.0), (PlayerInput::Left, 180.0), (PlayerInput::Up, 270.0)])
             }
+        }
+
+        fn normalize_angle(angle: f32) -> f32 {
+            angle % 359.0
         }
         pub fn die(&mut self) {
             self.player_in_game_status = PlayerInGameStatus::dead;
@@ -266,7 +277,7 @@ pub mod gamelogic {
                     if self.player_in_game_status == PlayerInGameStatus::dead {
                         self.player_in_game_status = PlayerInGameStatus::respawning;
                         self.position = ControllerPoint::random_point(BOUNDS_HEIGHT - PLAYER_SIZE as i32, BOUNDS_WIDTH - PLAYER_SIZE as i32);
-                        self.cooldown += 120;
+                        self.cooldown += 60;
                         return;
                     } 
 
@@ -278,13 +289,19 @@ pub mod gamelogic {
                 return;
             }
 
-            self.check_vertical();
+            self.speed_check();
 
-            self.check_horizontal();
+            self.apply_input();
 
             self.check_angle();
 
             self.check_shooting();
+
+            if self.has_movement_input() {
+                self.rotate_towards_target();
+            }
+
+            self.calculate_deltas();
 
             if self.is_moving() {
                 self.check_wall_collision();
@@ -309,6 +326,50 @@ pub mod gamelogic {
         }
         pub fn increment_score(&mut self) {
             self.score += 1;
+        }
+
+        fn apply_input(&mut self) {
+            let mut angles = Vec::<f32>::new();
+
+            for (input, angle) in self.input_to_angle_hash.iter() {
+                if self.input.contains(*input) {
+                    angles.push(*angle);
+                }
+            }
+
+            let sin_sum: f32 = angles.clone().into_iter().map(|angle| angle.to_radians().sin()).sum();
+            let cos_sum: f32 = angles.clone().into_iter().map(|angle| angle.to_radians().cos()).sum();
+
+            self.target_rotation = Player::normalize_angle(sin_sum.atan2(cos_sum).to_degrees());
+        }
+
+        fn rotate_towards_target(&mut self) {
+            let mut diff = self.target_rotation - self.tank_rotation;
+
+            if diff > 180.0 {
+                diff -= 360.0
+            } else if diff < -180.0 {
+                diff += 360.0
+            }
+
+            self.tank_rotation = Player::normalize_angle(self.tank_rotation + (diff * ANGLE_EASING_FACTOR));
+        }
+
+        fn calculate_deltas(&mut self) {
+            let radians = self.tank_rotation.to_radians();
+            self.delta_x = self.speed * radians.cos();
+            self.delta_y = self.speed * radians.sin();
+        }
+
+        fn speed_check(&mut self) {
+            if self.speed > 0.0 && !self.has_movement_input() {
+                self.speed -= 1.0; // brakes
+                return;
+            }
+
+            if self.has_movement_input() && !self.is_at_top_speed() {
+                self.speed += 1.0;
+            }
         }
         fn reverse_delta_y(&mut self) {
             if self.delta_y < 0.0 {
@@ -339,40 +400,19 @@ pub mod gamelogic {
             self.position.translate(self.delta_x, self.delta_y);
         }
 
+        fn has_movement_input(&self) -> bool {
+            self.input.contains(PlayerInput::Down) || 
+            self.input.contains(PlayerInput::Up) || 
+            self.input.contains(PlayerInput::Left) ||
+            self.input.contains(PlayerInput::Right)
+        }
+
         fn is_moving(&self) -> bool {
-            self.delta_x != 0.0 || self.delta_y != 0.0
+            self.speed > 0.0
         }
 
-        fn is_at_top_speed(delta: f32) -> bool {
-            delta.abs() >= 15.0
-        }
-
-        fn check_vertical(&mut self) {
-            let is_at_top_speed = Player::is_at_top_speed(self.delta_y);
-            if self.input.contains(PlayerInput::Up) && !is_at_top_speed {
-                self.delta_y -= 1.0;
-            } else if self.delta_y < 0.0 { // brakes
-                self.delta_y += 1.0
-            }
-            if self.input.contains(PlayerInput::Down) && !is_at_top_speed {
-                self.delta_y += 1.0;
-            } else if self.delta_y > 0.0 { // brakes
-                self.delta_y -= 1.0;
-            }
-        }
-
-        fn check_horizontal(&mut self) {
-            let is_at_top_speed = Player::is_at_top_speed(self.delta_x);
-            if self.input.contains(PlayerInput::Left) && !is_at_top_speed {
-                self.delta_x -= 1.0
-            } else if self.delta_x < 0.0 { //brakes
-                self.delta_x += 1.0;
-            }
-            if self.input.contains(PlayerInput::Right) && !is_at_top_speed {
-                self.delta_x += 1.0;
-            } else if self.delta_x > 0.0 { //brakes
-                self.delta_x -= 1.0;
-            }
+        fn is_at_top_speed(&self) -> bool {
+            self.speed >= 15.0
         }
 
         fn check_angle(&mut self) {
@@ -597,6 +637,7 @@ pub mod gamelogic {
                     self.cannon_shots.insert(self.internal_id_count, cannon_shot);
                 }
             }
+
             self.check_player_collisions();
 
             for id in cannon_shot_ids_marked_for_remove {
@@ -666,6 +707,7 @@ pub mod gamelogic {
                 player_response.set_cannon_position(player.get_cannon_position().to_buffer_point());
                 player_response.set_id(player.id);
                 player_response.set_in_game_status(player.player_in_game_status);
+                player_response.set_tank_rotation(player.tank_rotation as i32); // frontend graphic thinks 0 but the framework thinks 0 as left
                 player_response_vec.push(player_response);
             }
 
@@ -708,6 +750,7 @@ pub mod gamelogic {
                     if player.check_player_collision(other_player) {
                         if !self.handle_collisions.iter().any(|(first, second)| [*first, *second].contains(&player.id) || [*first, *second].contains(&other_player.id)) {
                             self.handle_collisions.push_back((player.id, other_player.id));
+                            println!("Collision!");
                         }
                     }
                 }
@@ -729,7 +772,7 @@ pub mod gamelogic {
         }
 
         fn elastic_collision(delta_1: f32, delta_2: f32) -> f32 {
-            (delta_1 * (PLAYER_MASS - PLAYER_MASS) + 2.0 * PLAYER_MASS * delta_2) / PLAYER_MASS + PLAYER_MASS
+            (delta_1 * (PLAYER_MASS - PLAYER_MASS) + 1.0 * PLAYER_MASS * delta_2) / PLAYER_MASS + PLAYER_MASS
         }
     }
 }
