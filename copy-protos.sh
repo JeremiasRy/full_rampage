@@ -1,5 +1,5 @@
 proto_bufs="./backend/protos/messages.proto"
-destination_dir="./frontend"
+destination_dir="./frontend/build"
 
 cp "$proto_bufs" "$destination_dir"
 cd frontend

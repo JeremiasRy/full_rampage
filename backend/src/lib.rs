@@ -228,7 +228,7 @@ pub mod gamelogic {
         power_loaded: i32,
         cannon_shot: Option<CannonShot>,
         input: i32,
-        speed: f32,
+        motor: f32,
         delta_x: f32,
         delta_y: f32,
         delta_a: f32,
@@ -247,7 +247,7 @@ pub mod gamelogic {
                 target_rotation: 0.0,
                 score: 0,
                 input: PlayerInput::NoInput as i32,
-                speed: 0.0,
+                motor: 0.0,
                 delta_x: 0.0,
                 delta_y: 0.0,
                 delta_a: 0.0,
@@ -256,7 +256,7 @@ pub mod gamelogic {
                 power_loaded: 0,
                 cooldown: 1,
                 player_in_game_status: PlayerInGameStatus::respawning,
-                input_to_angle_hash : HashMap::from([(PlayerInput::Down, 90.0), (PlayerInput::Right, 0.0), (PlayerInput::Left, 180.0), (PlayerInput::Up, 270.0)])
+                input_to_angle_hash: HashMap::from([(PlayerInput::Down, 90.0), (PlayerInput::Right, 0.0), (PlayerInput::Left, 180.0), (PlayerInput::Up, 270.0)])
             }
         }
 
@@ -289,7 +289,7 @@ pub mod gamelogic {
                 return;
             }
 
-            self.speed_check();
+            self.motor_check();
 
             self.apply_input();
 
@@ -301,7 +301,7 @@ pub mod gamelogic {
                 self.rotate_towards_target();
             }
 
-            self.calculate_deltas();
+            self.apply_motor_to_deltas();
 
             if self.is_moving() {
                 self.check_wall_collision();
@@ -352,23 +352,46 @@ pub mod gamelogic {
                 diff += 360.0
             }
 
+            if diff.abs() < 2.0 {
+                self.tank_rotation = self.target_rotation;
+                return;
+            }
             self.tank_rotation = Player::normalize_angle(self.tank_rotation + (diff * ANGLE_EASING_FACTOR));
         }
 
-        fn calculate_deltas(&mut self) {
-            let radians = self.tank_rotation.to_radians();
-            self.delta_x = self.speed * radians.cos();
-            self.delta_y = self.speed * radians.sin();
-        }
+        fn apply_motor_to_deltas(&mut self) {
+            let brakes = 0.85;
 
-        fn speed_check(&mut self) {
-            if self.speed > 0.0 && !self.has_movement_input() {
-                self.speed -= 1.0; // brakes
-                return;
+            let radians = self.tank_rotation.to_radians();
+
+            let apply_x = (self.motor * radians.cos()).round();
+            let apply_y = (self.motor * radians.sin()).round();
+
+            if apply_x == 0.0 {
+                if self.delta_x.abs() < 1.0 {
+                    self.delta_x = 0.0;
+                } else if self.delta_x.abs() > 1.0 {
+                    self.delta_x = self.delta_x * brakes;
+                }
             }
 
-            if self.has_movement_input() && !self.is_at_top_speed() {
-                self.speed += 1.0;
+            if apply_y == 0.0 {
+                if self.delta_y.abs() < 1.0 {
+                    self.delta_y = 0.0;
+                } else if self.delta_y.abs() > 1.0 {
+                    self.delta_y = self.delta_y * brakes;
+                }
+            }
+            
+            self.delta_x += apply_x;
+            self.delta_y += apply_y;
+        }
+
+        fn motor_check(&mut self) {
+            if self.has_movement_input() {
+                self.motor = 1.0;
+            } else {
+                self.motor = 0.0;
             }
         }
         fn reverse_delta_y(&mut self) {
@@ -408,11 +431,11 @@ pub mod gamelogic {
         }
 
         fn is_moving(&self) -> bool {
-            self.speed > 0.0
+            self.delta_x.abs() + self.delta_y.abs() > 0.0
         }
 
-        fn is_at_top_speed(&self) -> bool {
-            self.speed >= 15.0
+        fn is_at_top_velocity(&self) -> bool {
+            self.delta_x.abs() + self.delta_y.abs() > 20.0
         }
 
         fn check_angle(&mut self) {
@@ -549,7 +572,7 @@ pub mod gamelogic {
                 client.go_to_war();
             }
             self.status = GameControllerStatus::countdown;
-            self.countdown = 240;
+            self.countdown = 60;
         }
         pub fn countdown(&mut self) {
             self.countdown -= 1;
