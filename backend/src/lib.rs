@@ -352,7 +352,7 @@ pub mod gamelogic {
                 diff += 360.0
             }
 
-            if diff.abs() < 2.0 {
+            if diff.abs() < 1.0 {
                 self.tank_rotation = self.target_rotation;
                 return;
             }
@@ -360,14 +360,14 @@ pub mod gamelogic {
         }
 
         fn apply_motor_to_deltas(&mut self) {
-            let brakes = 0.85;
+            let brakes = 0.9;
 
             let radians = self.tank_rotation.to_radians();
 
-            let apply_x = (self.motor * radians.cos()).round();
-            let apply_y = (self.motor * radians.sin()).round();
+            let apply_x = self.motor * radians.cos();
+            let apply_y = self.motor * radians.sin();
 
-            if apply_x == 0.0 {
+            if apply_x.abs() < 0.1 {
                 if self.delta_x.abs() < 1.0 {
                     self.delta_x = 0.0;
                 } else if self.delta_x.abs() > 1.0 {
@@ -375,7 +375,7 @@ pub mod gamelogic {
                 }
             }
 
-            if apply_y == 0.0 {
+            if apply_y.abs() < 0.1 {
                 if self.delta_y.abs() < 1.0 {
                     self.delta_y = 0.0;
                 } else if self.delta_y.abs() > 1.0 {
@@ -383,8 +383,8 @@ pub mod gamelogic {
                 }
             }
             
-            self.delta_x += apply_x;
-            self.delta_y += apply_y;
+            self.delta_x += apply_x.round();
+            self.delta_y += apply_y.round();
         }
 
         fn motor_check(&mut self) {
@@ -396,17 +396,17 @@ pub mod gamelogic {
         }
         fn reverse_delta_y(&mut self) {
             if self.delta_y < 0.0 {
-                self.delta_y = 0.0 + self.delta_y.abs()
+                self.delta_y = 0.0 + self.delta_y.abs() / 2.0
             } else if self.delta_y > 0.0 {
-                self.delta_y = 0.0 - self.delta_y
+                self.delta_y = 0.0 - self.delta_y / 2.0
             }
         }
 
         fn reverse_delta_x(&mut self) {
             if self.delta_x < 0.0 {
-                self.delta_x = 0.0 + self.delta_x.abs();
+                self.delta_x = 0.0 + self.delta_x.abs() / 2.0;
             } else if self.delta_x > 0.0 {
-                self.delta_x = 0.0 - self.delta_x;
+                self.delta_x = 0.0 - self.delta_x / 2.0;
             }
         }
 
@@ -432,10 +432,6 @@ pub mod gamelogic {
 
         fn is_moving(&self) -> bool {
             self.delta_x.abs() + self.delta_y.abs() > 0.0
-        }
-
-        fn is_at_top_velocity(&self) -> bool {
-            self.delta_x.abs() + self.delta_y.abs() > 20.0
         }
 
         fn check_angle(&mut self) {
@@ -773,7 +769,6 @@ pub mod gamelogic {
                     if player.check_player_collision(other_player) {
                         if !self.handle_collisions.iter().any(|(first, second)| [*first, *second].contains(&player.id) || [*first, *second].contains(&other_player.id)) {
                             self.handle_collisions.push_back((player.id, other_player.id));
-                            println!("Collision!");
                         }
                     }
                 }
@@ -783,10 +778,9 @@ pub mod gamelogic {
             self.clients.values().filter(|client| client.status == ClientStatus::in_game).count()
         }
         fn handle_collision(first: &mut Player, second: &mut Player) {
-            let first_calculated_x = GameController::elastic_collision(first.delta_x, second.delta_x);
-            let first_calculated_y = GameController::elastic_collision(first.delta_y, second.delta_y);
-            let second_calculated_x = GameController::elastic_collision(second.delta_x, first.delta_x);
-            let second_calculated_y = GameController::elastic_collision(second.delta_y, first.delta_y);
+
+            let (first_calculated_x, second_calculated_x) = Self::elastic_collision(first.delta_x, second.delta_x);
+            let (first_calculated_y, second_calculated_y) = Self::elastic_collision(first.delta_y, second.delta_y);
 
             first.delta_x = first_calculated_x;
             first.delta_y = first_calculated_y;
@@ -794,8 +788,8 @@ pub mod gamelogic {
             second.delta_y = second_calculated_y;
         }
 
-        fn elastic_collision(delta_1: f32, delta_2: f32) -> f32 {
-            (delta_1 * (PLAYER_MASS - PLAYER_MASS) + 1.0 * PLAYER_MASS * delta_2) / PLAYER_MASS + PLAYER_MASS
+        fn elastic_collision(delta_1: f32, delta_2: f32) -> (f32, f32) {
+            (delta_2, delta_1)
         }
     }
 }
