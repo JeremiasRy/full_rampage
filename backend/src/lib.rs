@@ -13,7 +13,6 @@ pub mod gamelogic {
     const MAX_CANNON_SHOT_LENGTH: i32 = 300;
     const BOUNDS_HEIGHT: i32 = 800;
     const BOUNDS_WIDTH: i32 = 1200;
-    const PLAYER_MASS: f32 = 1.0; // just to keep things simple, mass could be added to players for more interesting players
     #[derive(Debug, PartialEq, Eq, Hash, Clone, Copy)]
     enum PlayerInput {
         NoInput,

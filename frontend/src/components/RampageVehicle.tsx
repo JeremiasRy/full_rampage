@@ -45,18 +45,18 @@ function DrawRampageVehicle(props: RampageVehicleProps) {
       g.clear();
 
       g.beginFill(0x444444);
-      g.drawRect(0, 0, trackHeight, trackWidth); // Top track (originally left track, rotated 90 degrees)
-      g.drawRect(0, tankHeight - trackWidth, trackHeight, trackWidth); // Bottom track (originally right track, rotated 90 degrees)
+      g.drawRect(0, 0, trackHeight, trackWidth);
+      g.drawRect(0, tankHeight - trackWidth, trackHeight, trackWidth);
 
       g.lineStyle(1, 0x222222);
       for (let i = 0; i < trackHeight; i += 5) {
-        g.moveTo(i, 0).lineTo(i, trackWidth); // Top track details
-        g.moveTo(i, tankHeight - trackWidth).lineTo(i, tankHeight); // Bottom track details
+        g.moveTo(i, 0).lineTo(i, trackWidth);
+        g.moveTo(i, tankHeight - trackWidth).lineTo(i, tankHeight);
       }
       g.endFill();
 
       g.beginFill(color)
-        .drawRect(bodyOffsetY, bodyOffsetX, bodyHeight, bodyWidth) // Draw body rotated 90 degrees
+        .drawRect(bodyOffsetY, bodyOffsetX, bodyHeight, bodyWidth)
         .endFill();
 
       g.beginFill(0x0000ff, 0.2);
