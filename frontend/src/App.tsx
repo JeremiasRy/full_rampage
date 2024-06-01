@@ -134,8 +134,7 @@ function App() {
     };
 
     protoLoad();
-
-    const socket = new WebSocket(import.meta.env.BACKEND_URL);
+    const socket = new WebSocket(import.meta.env.VITE_BACKEND_URL);
 
     socket.addEventListener("message", async (event): Promise<void> => {
       if (!protoRoot) {
