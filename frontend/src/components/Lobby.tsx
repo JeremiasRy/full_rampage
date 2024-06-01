@@ -66,7 +66,7 @@ export default function Lobby(props: LobbyProps) {
         <h2>
           {printGameStatus()}{" "}
           {gameStatus === GameControllerStatus.Countdown &&
-            Math.floor(countdownAmount / 60)}
+            Math.ceil(countdownAmount / 60)}
         </h2>
       </div>
       <div className="lobby__clients">

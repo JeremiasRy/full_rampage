@@ -242,7 +242,7 @@ pub mod gamelogic {
                 id,
                 position: ControllerPoint::random_point(max_height - PLAYER_SIZE as i32, max_width - PLAYER_SIZE as i32),
                 cannon_angle: 0.0,
-                tank_rotation: 0.0, // TODO
+                tank_rotation: 0.0, 
                 target_rotation: 0.0,
                 score: 0,
                 input: PlayerInput::NoInput as i32,
@@ -567,7 +567,7 @@ pub mod gamelogic {
                 client.go_to_war();
             }
             self.status = GameControllerStatus::countdown;
-            self.countdown = 60;
+            self.countdown = 240;
         }
         pub fn countdown(&mut self) {
             self.countdown -= 1;
