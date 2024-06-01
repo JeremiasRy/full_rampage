@@ -9,7 +9,7 @@
   color-scheme: light dark;
   color: rgba(255, 255, 255, 0.87);
   background-color: #242424;
-  background-image: url(./bg.webp);
+  background-image: url("/bg.webp");
   opacity: 1;
 
   font-synthesis: none;
@@ -67,14 +67,11 @@ body {
 .soldier__avatar {
   height: 50px;
   width: 50px;
-  background: url("./avatar.png");
+  background: url("/avatar.png");
   background-repeat: no-repeat;
   background-position: center;
   background-size: cover;
   border: #ff00ea48 solid 1px;
-}
-
-.info {
 }
 
 .lobby-wrapper__lobby-item button {
