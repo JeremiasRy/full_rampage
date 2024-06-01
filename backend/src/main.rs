@@ -1,6 +1,7 @@
 use std::collections::hash_map::ValuesMut;
 use std::collections::HashMap;
 use tokio::sync::mpsc::Sender;
+use std::env;
 use std::time::Duration;
 use protobuf::Message;
 use futures_util::stream::{SplitSink, StreamExt};
@@ -30,6 +31,14 @@ enum TxMessage  {
 
 #[tokio::main]
 async fn main() {
+    let args: Vec<String> = env::args().collect();
+    if args.len() < 2 {
+        println!("Please specify a framerate! Ex. ./backend 60, cargo run -- 60");
+        return;
+    }
+    let frame_rate: f64 = args[1].parse().unwrap();
+
+    println!("{}", frame_rate);
     let (sender, receiver) = tokio::sync::mpsc::channel::<TxMessage>(100);
     let mut id_count:i32 = 0;
 
@@ -42,7 +51,7 @@ async fn main() {
 
     tokio::spawn(main_game_loop(receiver));
     tokio::spawn(async move {
-        let tick_rate = Duration::from_secs_f64(1.0 / 60.0);
+        let tick_rate = Duration::from_secs_f64(1.0 / frame_rate);
         let mut last_tick = Instant::now();
         
         loop {
