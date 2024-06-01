@@ -38,7 +38,6 @@ async fn main() {
     }
     let frame_rate: f64 = args[1].parse().unwrap();
 
-    println!("{}", frame_rate);
     let (sender, receiver) = tokio::sync::mpsc::channel::<TxMessage>(100);
     let mut id_count:i32 = 0;
 
