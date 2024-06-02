@@ -562,6 +562,7 @@ pub mod gamelogic {
             }
         }
         pub fn start_countdown(&mut self) {
+            self.players.clear();
             for (id, client) in self.clients.iter_mut().filter(|(_, client)| client.lobby_status == ClientLobbyStatus::ready) {
                 self.players.insert(*id, Player::new(*id, self.height, self.width));
                 client.go_to_war();
@@ -579,7 +580,7 @@ pub mod gamelogic {
             self.status == GameControllerStatus::countdown
         }
         pub fn check_for_winner(&mut self) -> Option<GameControllerTickOutput> {
-            if let Some((id, _)) = self.players.iter().find(|(_, player)| player.get_score() > 10) {
+            if let Some((id, _)) = self.players.iter().find(|(_, player)| player.get_score() >= 5) {
                 self.winner_of_last_game = *id;
                 self.stop();
                 return Some(GameControllerTickOutput::WeHaveAWinner)
@@ -594,7 +595,9 @@ pub mod gamelogic {
         }
         pub fn stop(&mut self) {
             self.status = GameControllerStatus::stopped;
-            self.players.clear();
+            for (_, player) in self.players.iter_mut() {
+                player.die()
+            }
             self.explosions.clear();
             self.cannon_shots.clear();
             self.clients.iter_mut().for_each(|(_, client)| client.back_to_lobby_and_wait());
