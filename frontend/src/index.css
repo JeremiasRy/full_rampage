@@ -18,6 +18,20 @@
   -moz-osx-font-smoothing: grayscale;
 }
 
+.info {
+  display: flex;
+  flex-direction: row;
+  gap: 0.8em;
+}
+
+.winner {
+  background-color: yellow;
+  color: black;
+  border-radius: 3em;
+  padding: 0 0.8em;
+  box-shadow: 2px 2px 2px 2px rgb(49, 49, 0);
+}
+
 body {
   height: 100%;
   width: auto;
@@ -54,7 +68,7 @@ body {
   flex-direction: column;
   height: 800px;
   box-sizing: border-box;
-  min-width: 20vw;
+  min-width: 25vw;
   justify-content: start;
 }
 

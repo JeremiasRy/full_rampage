@@ -76,20 +76,27 @@ export default function Lobby(props: LobbyProps) {
             <div
               className={`lobby-wrapper__lobby-item ${
                 currentClientId === id && "client"
-              } 
-          ${lobbyStatus === ClientLobbyStatus.Ready ? "ready" : "waiting"}`}
+              } ${
+                lobbyStatus === ClientLobbyStatus.Ready ? "ready" : "waiting"
+              }`}
               key={id}
             >
               <div className="soldier__avatar" />
+              {id === winnerOfLastGame && (
+                <span className="winner">Champ!</span>
+              )}
               <div className="info">
-                {GameControllerStatus.Playing && <> Score: {score} </>}|{" "}
-                {printClientStatus(lobbyStatus)}
-                {currentClientId === id &&
-                  lobbyStatus === ClientLobbyStatus.Waiting &&
-                  gameStatus === GameControllerStatus.Stopped && (
-                    <button onClick={onAction}>Ready?</button>
-                  )}
-                {id === winnerOfLastGame && "Winner"}
+                <span>
+                  {GameControllerStatus.Playing && <> Score: {score} </>}
+                </span>
+                <span>{printClientStatus(lobbyStatus)}</span>
+                <span>
+                  {currentClientId === id &&
+                    lobbyStatus === ClientLobbyStatus.Waiting &&
+                    gameStatus === GameControllerStatus.Stopped && (
+                      <button onClick={onAction}>Ready?</button>
+                    )}
+                </span>
               </div>
             </div>
           ))}
