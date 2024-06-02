@@ -1,6 +1,5 @@
-import { useCallback, useMemo } from "react";
+import { useMemo } from "react";
 import { Container, Graphics as GraphicsComponent } from "@pixi/react";
-import { Graphics } from "@pixi/graphics";
 import { rampageVehicle, turret } from "../utils/drawFunctions";
 
 export interface RampageVehicleProps {
